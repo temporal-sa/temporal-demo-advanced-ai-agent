@@ -374,6 +374,33 @@ class ApprovalHistoryWiringTests(unittest.TestCase):
         self.assertEqual(result, [history[0]])
         self.assertEqual(CodingAgent._recent_approval_history(agent, "search_code"), [])
 
+    def test_subagent_adopts_parent_history_and_records_its_own(self) -> None:
+        from temporal_agent_harness.harness.agent_protocol import ToolApprovalDecision
+
+        from simple_chat_agent.agent.contracts import ApprovalHistoryEntry
+        from simple_chat_agent.agent.subagents import TaskAgent
+
+        prior = ApprovalHistoryEntry(tool_name="edit_file", args_summary="{}", approved=True, reason="fine")
+        child = SimpleNamespace(
+            _runner=self.agent({"t1": _ApprovalEntryStub("run_command", {"command": "pytest"})})._runner,
+            _approval_history=[],
+            _turn_decisions=[],
+        )
+        TaskAgent._adopt_parent_history(child, [prior])
+        TaskAgent._limit_remember(child, ToolApprovalDecision(tool_id="t1", approved=True, reason=None))
+        self.assertEqual(child._approval_history[0], prior)
+        self.assertEqual(child._turn_decisions[0].tool_name, "run_command")
+        self.assertEqual(TaskAgent._recent_approval_history(child, "edit_file"), [prior])
+
+    def test_parent_merges_decisions_a_subagent_reports(self) -> None:
+        from simple_chat_agent.agent.contracts import ApprovalHistoryEntry, SubagentApprovalHistory
+
+        agent = SimpleNamespace(_signals_this_run=0, _approval_history=[])
+        entry = ApprovalHistoryEntry(tool_name="run_command", args_summary="{}", approved=False, reason="no")
+        asyncio.run(CodingAgent.subagent_approval_history(agent, SubagentApprovalHistory(entries=[entry, entry])))
+        self.assertEqual(agent._signals_this_run, 1)
+        self.assertEqual(agent._approval_history, [entry])
+
 
 class PlanReminderTests(unittest.TestCase):
     """The plan is shown to the model on each request while steps are open, never stored."""

@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { railLabel, rowCaption } from "./Sidebar";
+import { railLabel, rowCaption, Sidebar } from "./Sidebar";
 import { Unreachable } from "./Unreachable";
 import { footerText, meterModelLabel } from "../app/App";
 import { NO_SESSION_REASON, viewDefs } from "./ViewLinks";
@@ -19,6 +19,28 @@ describe("sidebar status is spelled out, not color alone (UX review m10)", () =>
     expect(rowCaption(s(), null, "GPT-5.5")).toBe("GPT-5.5 · now");
     expect(railLabel(s(), "waiting_for_you")).toBe("Refund bug (Waiting for you)");
     expect(railLabel(s(), null)).toBe("Refund bug");
+  });
+});
+
+describe("archiving a session (each row gets its own menu, not a shared one)", () => {
+  it("offers Archive for every session, naming the session it acts on", () => {
+    const html = renderToStaticMarkup(
+      <Sidebar
+        sessions={[s({ session_id: "s1", title: "Refund bug" }), s({ session_id: "s2", title: "Flaky test" })]}
+        loadError={null}
+        currentId="s1"
+        currentStatus={null}
+        modelName={() => "GPT-5.5"}
+        creating={null}
+        onSelect={() => undefined}
+        onNewDemo={() => undefined}
+        onNewEmpty={() => undefined}
+        onArchive={() => undefined}
+        footer="Signed in as demo"
+      />,
+    );
+    expect(html).toContain('aria-label="More actions for Refund bug"');
+    expect(html).toContain('aria-label="More actions for Flaky test"');
   });
 });
 

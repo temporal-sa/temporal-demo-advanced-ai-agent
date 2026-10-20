@@ -90,7 +90,7 @@ Status as of P5 (2026-10-16):
 | History budget (A20): checkpoint at 60% of the caps | `tests/test_budget.py::HistoryBudgetTests` (7 tests) |
 | Spend caps (A21) block, and fail closed when Redis is down | `tests/test_budget.py::SpendGuardRedisTests::test_session_cap`, `::test_user_day_cap_and_day_rollover`, `::test_global_breaker_blocks_everyone`; `tests/test_budget.py::SpendGuardFailClosedTests::test_check_fails_closed_when_redis_is_down`, `::test_from_env_fails_closed_on_dead_url` |
 | Subagent depth 1: no child gets `task`, browser callbacks or artifacts; explore and review children get read-only tools only | `tests/test_security_rules.py::SubagentDepthTests::test_no_child_can_start_an_agent_or_ask_the_user`, `::test_read_only_types_get_read_only_tools_only`, `::test_general_gets_session_research_tools_and_test_tools_only_locally` |
-| A subagent's gated calls ask under its parent's approval policy (vetted again in the catalog) | `tests/integration/test_p1_agent.py::P1AgentTests::test_subagent_calls_ask_under_the_parent_posture` (integration) |
+| A subagent inherits its parent's approval policy, including auto mode and "never ask"; the catalog only strips allow-list names it forbids | `tests/test_approvals.py::CriteriaAndPostures::test_subagent_inherits_parent_policy_including_auto_mode`; `tests/integration/test_p1_agent.py::P1AgentTests::test_subagent_calls_ask_under_the_parent_posture` (integration) |
 
 ## §5.8 Retry policies by class
 

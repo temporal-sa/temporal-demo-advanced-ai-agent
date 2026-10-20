@@ -167,6 +167,11 @@ export interface CreateSessionBody {
 export const createSession = (body: CreateSessionBody) =>
   request<SessionSummary>(`${AGENT_API_BASE}sessions`, { method: "POST", body: JSON.stringify(body) });
 
+/** Closes the session's workflow and drops it from the list for good: once archived, there is
+ *  no "show archived" or undo. Temporal keeps the run's own history regardless. */
+export const archiveSession = (id: string) =>
+  request<{ ok: boolean; workflow_id: string }>(`${AGENT_API_BASE}sessions/${encodeURIComponent(id)}`, { method: "DELETE" });
+
 /** A session summary's model, if it names one. */
 export function summaryModel(s: Pick<SessionSummary, "model"> | null | undefined): ModelChoice | null {
   const m = s?.model;

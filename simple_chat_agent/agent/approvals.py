@@ -359,6 +359,30 @@ def sanitize_caller_policy(
         return policy
     if policy.dangerously_skip_all_approvals:
         return None
+    return _drop_disallowed_names(policy)
+
+
+def inherit_approval_policy(
+    policy: ToolApprovalPolicy | None, environment: Environment
+) -> ToolApprovalPolicy | None:
+    """The policy a subagent runs under: its parent's live policy, including auto mode.
+
+    The parent already adopted this policy (its posture, its "always allow" list, auto mode's
+    on/off switch). The child does not get a stricter default of its own. Locally the policy
+    passes through unchanged. In the catalog, names that may not sit on an allow-list are
+    removed, but auto mode and "never ask" stay: both are the parent's posture, and "never
+    ask" is allowed in the catalog. ``None`` means the parent passed no policy.
+    """
+    _check_environment(environment)
+    if policy is None or environment == "local":
+        return policy
+    if policy.dangerously_skip_all_approvals:
+        return policy
+    return _drop_disallowed_names(policy)
+
+
+def _drop_disallowed_names(policy: ToolApprovalPolicy) -> ToolApprovalPolicy:
+    """Remove allow-list names the catalog does not permit, leaving every other field."""
     kept = frozenset(name for name in policy.auto_approve_tools if catalog_may_preallow(name))
     if kept == policy.auto_approve_tools:
         return policy
@@ -636,6 +660,22 @@ def summarize_tool_args(tool_input: Mapping[str, Any], *, max_chars: int = MAX_H
     return text if len(text) <= max_chars else text[: max_chars - 1] + "\u2026"
 
 
+def _trim_approval_history(history: list[ApprovalHistoryEntry]) -> None:
+    """Cap ``history`` in place: :data:`MAX_APPROVAL_HISTORY_PER_TOOL` per tool, oldest dropped
+    first, then :data:`MAX_APPROVAL_HISTORY_TOTAL` overall."""
+    kept_for_tool: dict[str, int] = {}
+    trimmed: list[ApprovalHistoryEntry] = []
+    for entry in reversed(history):
+        kept = kept_for_tool.get(entry.tool_name, 0) + 1
+        kept_for_tool[entry.tool_name] = kept
+        if kept > MAX_APPROVAL_HISTORY_PER_TOOL:
+            continue
+        trimmed.append(entry)
+    trimmed.reverse()
+    del history[:]
+    history.extend(trimmed[-MAX_APPROVAL_HISTORY_TOTAL:])
+
+
 def record_decision(
     history: list[ApprovalHistoryEntry],
     tool_name: str,
@@ -643,33 +683,40 @@ def record_decision(
     *,
     approved: bool,
     reason: str | None,
-) -> None:
-    """Append one human decision to ``history`` IN PLACE, then trim it: at most
-    :data:`MAX_APPROVAL_HISTORY_PER_TOOL` entries for ``tool_name``, oldest dropped first, and
-    :data:`MAX_APPROVAL_HISTORY_TOTAL` overall.
+) -> ApprovalHistoryEntry:
+    """Append one human decision to ``history`` IN PLACE, then trim it.
 
     Call this for every decision that reaches a person, whatever the posture — not only in
     auto mode — so the history is already there, real and session-specific, the moment a user
-    turns auto mode on."""
-    history.append(
-        ApprovalHistoryEntry(
-            tool_name=tool_name,
-            args_summary=summarize_tool_args(tool_input),
-            approved=approved,
-            reason=(reason or "").strip()[:MAX_HISTORY_REASON_CHARS],
-        )
+    turns auto mode on. Returns the entry that was appended (it survives the trim: the newest
+    decision for its tool is the last one dropped)."""
+    entry = ApprovalHistoryEntry(
+        tool_name=tool_name,
+        args_summary=summarize_tool_args(tool_input),
+        approved=approved,
+        reason=(reason or "").strip()[:MAX_HISTORY_REASON_CHARS],
     )
-    kept_for_tool = 0
-    trimmed: list[ApprovalHistoryEntry] = []
-    for entry in reversed(history):
-        if entry.tool_name == tool_name:
-            kept_for_tool += 1
-            if kept_for_tool > MAX_APPROVAL_HISTORY_PER_TOOL:
-                continue
-        trimmed.append(entry)
-    trimmed.reverse()
-    del history[:]
-    history.extend(trimmed[-MAX_APPROVAL_HISTORY_TOTAL:])
+    history.append(entry)
+    _trim_approval_history(history)
+    return entry
+
+
+def merge_approval_history(
+    history: list[ApprovalHistoryEntry], entries: Iterable[ApprovalHistoryEntry]
+) -> None:
+    """Append ``entries`` the session does not already have, then trim.
+
+    A subagent reports the decisions its own gate collected. The same call can also be in the
+    snapshot the parent sent the child, so an entry already present (same tool, arguments,
+    verdict and reason) is not added twice."""
+    seen = {(entry.tool_name, entry.args_summary, entry.approved, entry.reason) for entry in history}
+    for entry in entries:
+        key = (entry.tool_name, entry.args_summary, entry.approved, entry.reason)
+        if key in seen:
+            continue
+        history.append(entry)
+        seen.add(key)
+    _trim_approval_history(history)
 
 
 def recent_decisions_for(

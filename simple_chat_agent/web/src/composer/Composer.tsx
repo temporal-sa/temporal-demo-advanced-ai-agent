@@ -9,7 +9,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { AgentConfig, Attachment, CodingSession, ModelChoice, Posture, SendRecord } from "../session";
 import { MAX_ATTACHMENTS } from "../session/derive";
 import { errorCopy } from "../session/errors";
-import { Menu } from "./Menu";
+import { Menu } from "../shell/Menu";
 import {
   alwaysApprovedText,
   choiceLabel,

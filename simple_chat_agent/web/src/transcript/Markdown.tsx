@@ -2,9 +2,32 @@
 // the text is not rendered (react-markdown's default); images become links, so a reply can't
 // make the browser fetch from another host.
 
-import { memo, useEffect, useRef, useState } from "react";
+import { isValidElement, memo, useEffect, useRef, useState, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { highlightCode } from "./highlight";
+
+function codeText(node: ReactNode): string {
+  if (node == null || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(codeText).join("");
+  if (isValidElement(node)) return codeText((node.props as { children?: ReactNode }).children);
+  return "";
+}
+
+/** A fenced block. Inline `code` stays a plain chip; only a fence (the `pre` wrapper) is colored. */
+function CodeBlock({ children }: { children?: ReactNode }) {
+  const code = isValidElement(children) ? children : null;
+  const props = (code?.props ?? {}) as { className?: string; children?: ReactNode };
+  const info = /language-(\S+)/.exec(props.className ?? "")?.[1];
+  const source = codeText(props.children).replace(/\n$/, "");
+  const html = highlightCode(source, info);
+  return (
+    <pre>
+      <code className={info ? `hljs language-${info}` : "hljs"} dangerouslySetInnerHTML={{ __html: html }} />
+    </pre>
+  );
+}
 
 const components: Components = {
   a: ({ href, children }) => (
@@ -17,6 +40,7 @@ const components: Components = {
       {alt || "image"}
     </a>
   ),
+  pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
 };
 
 export const Markdown = memo(function Markdown({ text }: { text: string }) {

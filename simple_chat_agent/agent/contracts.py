@@ -25,6 +25,9 @@ ENQUEUE_MESSAGE_SIGNAL = "enqueue_message"
 ENQUEUE_APPROVAL_SIGNAL = "enqueue_approval"
 # The answer to a browser callback tool (ask_user, pick_files; PRD A12).
 ENQUEUE_CALLBACK_SIGNAL = "enqueue_callback_result"
+# A subagent reports the human decisions it collected this turn, so they join the session's
+# approval history (the auto-mode judge reads that history on the parent and on later children).
+SUBAGENT_APPROVAL_HISTORY_SIGNAL = "subagent_approval_history"
 # The Redis bridge reports the highest stream offset it has stored, once per turn end. The
 # agent then trims only what the bridge holds when it continues as new (P2 decision 4).
 STREAM_ACKED_SIGNAL = "stream_acked"
@@ -352,6 +355,17 @@ class TaskRequest(BaseModel):
 
     description: str = ""
     prompt: str
+    # This session's approval decisions so far. The parent fills it; the subagent's judge reads
+    # it, and decisions the subagent collects are signaled back. Empty for a parent that predates
+    # it. Not part of the task the subagent was given.
+    approval_history: list[ApprovalHistoryEntry] = Field(default_factory=list)
+
+
+class SubagentApprovalHistory(BaseModel):
+    """Payload of ``subagent_approval_history``: decisions a subagent's human gate collected
+    during one task, for the parent to merge into the session history."""
+
+    entries: list[ApprovalHistoryEntry] = Field(default_factory=list)
 
 
 class TaskFileChange(BaseModel):

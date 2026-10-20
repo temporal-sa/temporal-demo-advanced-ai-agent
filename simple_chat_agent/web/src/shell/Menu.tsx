@@ -1,6 +1,7 @@
-// A small popover menu for the composer's pickers: a button that opens a list above it.
-// Escape and a click outside close it; arrow keys move between items; focus returns to the
-// button. Escape inside the menu doesn't reach the composer's Stop shortcut.
+// A small popover menu: a button that opens a list above it. Escape and a click outside close
+// it; arrow keys move between items; focus returns to the button. Escape inside the menu
+// doesn't reach the composer's Stop shortcut. Built for the composer's pickers; the sidebar's
+// per-session menu reuses it too.
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 

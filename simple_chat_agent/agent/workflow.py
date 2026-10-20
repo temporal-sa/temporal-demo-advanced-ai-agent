@@ -39,6 +39,7 @@ with workflow.unsafe.imports_passed_through():
         ENQUEUE_APPROVAL_SIGNAL,
         ENQUEUE_CALLBACK_SIGNAL,
         ENQUEUE_MESSAGE_SIGNAL,
+        SUBAGENT_APPROVAL_HISTORY_SIGNAL,
         STREAM_ACKED_SIGNAL,
         Ack,
         AlwaysAllowedForgotten,
@@ -59,6 +60,7 @@ with workflow.unsafe.imports_passed_through():
         SetPosture,
         SetWebSearch,
         SteerMessage,
+        SubagentApprovalHistory,
         StreamAck,
     )
     from simple_chat_agent.agent.prompts import CODING_AGENT_INSTRUCTIONS
@@ -437,6 +439,13 @@ class CodingAgent:
         self._signals_this_run += 1
         self._stream_acked = max(self._stream_acked, ack.offset)
 
+    @workflow.signal(name=SUBAGENT_APPROVAL_HISTORY_SIGNAL)
+    async def subagent_approval_history(self, update: SubagentApprovalHistory) -> None:
+        """Decisions a subagent's gate collected this task. Merged into the session history
+        the auto-mode judge reads, on this agent and on the next subagent."""
+        self._signals_this_run += 1
+        approvals.merge_approval_history(self._approval_history, update.entries)
+
     @workflow.signal(name=ENQUEUE_APPROVAL_SIGNAL)
     async def enqueue_approval(self, approval: FrontDoorApproval) -> None:
         self._signals_this_run += 1
@@ -628,6 +637,7 @@ class CodingAgent:
                     approval_policy=self._runner.approval_policy,
                     auto_approval_criteria=self._runner.auto_approval_criteria,
                 ),
+                history=lambda: list(self._approval_history),
             )
         if self._data.test_tools and self._data.environment == "local":
             # Defense in depth: the API offers the flag only locally; the catalog never gets

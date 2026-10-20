@@ -135,6 +135,22 @@ function Shell({ me, auth, onUnreachable }: { me: Me; auth: AuthConfig; onUnreac
     setSelected(id);
   }, []);
 
+  const archive = useCallback(
+    async (id: string) => {
+      setActionError(null);
+      try {
+        await api.archiveSession(id);
+        // Archiving closes the workflow and drops it from the list for good: leave the
+        // session if it was open, so the next render never asks for it and finds it gone.
+        if (id === selected) select(null);
+        await refresh();
+      } catch (err) {
+        fail(err, "Couldn't archive that session. Try again.", setActionError);
+      }
+    },
+    [selected, select, refresh, fail],
+  );
+
   const create = useCallback(
     async (kind: "demo" | "empty") => {
       setCreating(kind);
@@ -204,6 +220,7 @@ function Shell({ me, auth, onUnreachable }: { me: Me; auth: AuthConfig; onUnreac
     clearMcpNotice: () => setMcpNotice(null),
     select,
     create,
+    archive,
     refresh,
     modelName,
     onUnreachable,
@@ -233,6 +250,7 @@ interface ShellParts {
   clearMcpNotice(): void;
   select(id: string | null): void;
   create(kind: "demo" | "empty"): Promise<void>;
+  archive(id: string): Promise<void>;
   refresh(): Promise<void>;
   modelName(choice: Partial<ModelChoice> | null | undefined, withProvider?: boolean): string;
   onUnreachable(): void;
@@ -309,6 +327,7 @@ function Layout({ parts, session, page = { kind: "landing" } }: { parts: ShellPa
       setDrawer(false);
       void parts.create("empty");
     },
+    onArchive: (id) => void parts.archive(id),
     footer: footerText(parts.me.username, parts.auth.mode, parts.config?.session_ttl_days ?? null),
   };
 

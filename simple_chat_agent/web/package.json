@@ -15,6 +15,7 @@
   "dependencies": {
     "@temporalio/agent-harness-client": "0.1.0",
     "@temporalio/agent-harness-react": "0.1.0",
+    "highlight.js": "11.11.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "react-markdown": "10.1.0",

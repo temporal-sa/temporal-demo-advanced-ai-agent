@@ -18,6 +18,21 @@ export interface AlwaysAllowedForgotten {
   forgotten: string[];
 }
 /**
+ * One call a human decided after it was escalated (asked), kept so the auto-mode judge
+ * can recognize a similar future call instead of asking again.
+ *
+ * ``args_summary`` is a compact, bounded rendering of the call's arguments (see
+ * ``approvals.summarize_tool_args``), never the raw dict: it rides along in CarriedState and
+ * in every judge prompt for the tool, so it has to stay small regardless of how large a call's
+ * real arguments were. ``reason`` is the human's stated reason, if they gave one, also bounded.
+ */
+export interface ApprovalHistoryEntry {
+  tool_name: string;
+  args_summary: string;
+  approved: boolean;
+  reason?: string;
+}
+/**
  * Everything a run hands to the next one when it continues as new.
  *
  * The conversation is opaque JSON here so this module stays free of Pydantic AI; the
@@ -46,6 +61,7 @@ export interface CarriedState {
   mcp_tools?: {
     [k: string]: unknown | undefined;
   }[];
+  approval_history?: ApprovalHistoryEntry[];
 }
 /**
  * Serializable snapshot of stream state for continue-as-new.
@@ -558,6 +574,7 @@ export interface TaskFileChange {
 export interface TaskRequest {
   description?: string;
   prompt: string;
+  approval_history?: ApprovalHistoryEntry[];
 }
 /**
  * A subagent's report on its task. ``text`` is its final message; the parent's Changes

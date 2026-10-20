@@ -1,4 +1,5 @@
 import type { SessionStatus, SessionSummary } from "../session";
+import { Menu } from "./Menu";
 import { STATUS_TEXT, StatusDot } from "./StatusPill";
 
 export interface SidebarProps {
@@ -11,6 +12,8 @@ export interface SidebarProps {
   onSelect(id: string): void;
   onNewDemo(): void;
   onNewEmpty(): void;
+  /** Archives one session: closes its workflow and drops it from the list for good. */
+  onArchive(id: string): void;
   footer: string;
 }
 
@@ -70,7 +73,7 @@ function SessionList(p: SidebarProps) {
   return (
     <ul className="sess">
       {p.sessions.map((s) => (
-        <li key={s.session_id}>
+        <li key={s.session_id} className="sess-item">
           <button
             type="button"
             className="sess-row"
@@ -81,6 +84,34 @@ function SessionList(p: SidebarProps) {
             <span className="t">{s.title}</span>
             <small>{rowCaption(s, rowStatus(s, p), p.modelName(s))}</small>
           </button>
+          <Menu
+            rootClass="sess-menu"
+            label={`${s.title} actions`}
+            buttonLabel={`More actions for ${s.title}`}
+            buttonClass="sess-more"
+            buttonContent={
+              <span aria-hidden="true" className="dots">
+                ⋯
+              </span>
+            }
+          >
+            {(close) => (
+              <>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="menu-item"
+                  onClick={() => {
+                    close();
+                    p.onArchive(s.session_id);
+                  }}
+                >
+                  <span>Archive</span>
+                </button>
+                <div className="menu-foot hint">Closes the session and removes it from this list for good.</div>
+              </>
+            )}
+          </Menu>
         </li>
       ))}
     </ul>

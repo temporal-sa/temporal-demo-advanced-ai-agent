@@ -141,6 +141,35 @@
       "title": "AlwaysAllowedForgotten",
       "type": "object"
     },
+    "ApprovalHistoryEntry": {
+      "description": "One call a human decided after it was escalated (asked), kept so the auto-mode judge\ncan recognize a similar future call instead of asking again.\n\n``args_summary`` is a compact, bounded rendering of the call's arguments (see\n``approvals.summarize_tool_args``), never the raw dict: it rides along in CarriedState and\nin every judge prompt for the tool, so it has to stay small regardless of how large a call's\nreal arguments were. ``reason`` is the human's stated reason, if they gave one, also bounded.",
+      "properties": {
+        "tool_name": {
+          "title": "Tool Name",
+          "type": "string"
+        },
+        "args_summary": {
+          "title": "Args Summary",
+          "type": "string"
+        },
+        "approved": {
+          "title": "Approved",
+          "type": "boolean"
+        },
+        "reason": {
+          "default": "",
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool_name",
+        "args_summary",
+        "approved"
+      ],
+      "title": "ApprovalHistoryEntry",
+      "type": "object"
+    },
     "CarriedState": {
       "description": "Everything a run hands to the next one when it continues as new.\n\nThe conversation is opaque JSON here so this module stays free of Pydantic AI; the\nworkflow validates it on the way in.",
       "properties": {
@@ -227,6 +256,13 @@
             "type": "object"
           },
           "title": "Mcp Tools",
+          "type": "array"
+        },
+        "approval_history": {
+          "items": {
+            "$ref": "#/$defs/ApprovalHistoryEntry"
+          },
+          "title": "Approval History",
           "type": "array"
         }
       },

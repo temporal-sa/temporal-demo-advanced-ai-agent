@@ -1458,6 +1458,9 @@ def create_agent_router(
 
     @router.delete("/sessions/{session_id}")
     async def delete_session(session_id: str, uid: str = Depends(user_id)):
+        """Closes the workflow and drops the session from the owner's list for good. This is
+        what the web UI's "Archive" action calls: Temporal keeps the run's own history, but
+        nothing here brings the session back into the list or the UI."""
         await require_root(session_id, uid)
         try:
             await (await temporal()).get_workflow_handle(session_id).signal("close")

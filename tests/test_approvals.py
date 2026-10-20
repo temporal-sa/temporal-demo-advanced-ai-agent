@@ -411,6 +411,36 @@ class CriteriaAndPostures(unittest.TestCase):
         with self.assertRaises(ValueError):
             sanitize(ok_edit, "prod")  # type: ignore[arg-type]
 
+    def test_subagent_inherits_parent_policy_including_auto_mode(self) -> None:
+        from temporal_agent_harness.harness.agent_protocol import AgentConfig
+
+        from simple_chat_agent.agent.subagents import child_run_config
+
+        criteria = default_criteria("catalog")
+        auto = policy_for("auto", "catalog", also_allow=approvals.SUBAGENT_TOOL_NAMES)
+        auto = auto.with_tool_allowed("edit_file").with_tool_allowed("run_command")
+        child = child_run_config(AgentConfig(approval_policy=auto, auto_approval_criteria=criteria), "catalog")
+        assert child.approval_policy is not None
+        self.assertTrue(child.approval_policy.auto_mode_enabled)
+        self.assertIn("edit_file", child.approval_policy.auto_approve_tools)
+        self.assertNotIn("run_command", child.approval_policy.auto_approve_tools)
+        # The parent's rulebook is the child's. It is not replaced with a fresh default.
+        self.assertIs(child.auto_approval_criteria, criteria)
+
+        skip = policy_for("never_ask", "catalog")
+        inherited = child_run_config(AgentConfig(approval_policy=skip, auto_approval_criteria=criteria), "catalog")
+        assert inherited.approval_policy is not None
+        self.assertTrue(inherited.approval_policy.dangerously_skip_all_approvals)
+        self.assertIs(inherited.auto_approval_criteria, criteria)
+
+        local_auto = policy_for("auto", "local", also_allow=["run_command", *approvals.SUBAGENT_TOOL_NAMES])
+        local = child_run_config(
+            AgentConfig(approval_policy=local_auto, auto_approval_criteria=criteria), "local"
+        )
+        self.assertIs(local.approval_policy, local_auto)
+        self.assertTrue(local.approval_policy.auto_mode_enabled)
+        self.assertIn("run_command", local.approval_policy.auto_approve_tools)
+
     def test_posture_mapping(self) -> None:
         for env in ("catalog", "local"):
             self.assertEqual(
@@ -653,6 +683,16 @@ class ApprovalHistory(unittest.TestCase):
         matches = recent_decisions_for(history, "edit_file")
         self.assertEqual([m.approved for m in matches], [True, False])
         self.assertEqual(recent_decisions_for(history, "search_code"), [])
+
+    def test_merge_approval_history_appends_new_and_skips_duplicates(self) -> None:
+        history: list[ApprovalHistoryEntry] = []
+        record_decision(history, "edit_file", {"path": "a"}, approved=True, reason="ok")
+        extra = [
+            history[0],
+            ApprovalHistoryEntry(tool_name="run_command", args_summary='{"command": "pytest"}', approved=True, reason=""),
+        ]
+        approvals.merge_approval_history(history, extra)
+        self.assertEqual([entry.tool_name for entry in history], ["edit_file", "run_command"])
 
     def test_judge_request_carries_history(self) -> None:
         history = [ApprovalHistoryEntry(tool_name="edit_file", args_summary="{}", approved=True, reason="fine")]

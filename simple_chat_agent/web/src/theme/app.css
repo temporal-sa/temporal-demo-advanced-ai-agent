@@ -138,6 +138,7 @@ html[data-presenter="on"] .body { grid-template-columns: var(--rail-w) minmax(0,
   display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: .8em; min-height: 0;
 }
 .side .sess { display: grid; gap: .15em; align-content: start; overflow-y: auto; margin: 0; padding: 0; list-style: none; }
+.sess-item { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
 .sess-row {
   display: grid; grid-template-columns: .6em minmax(0, 1fr); gap: .1em .6em; align-items: center; padding: .5em; width: 100%;
   font-size: .88em; color: var(--indigo-100); text-align: left; border-left: 2px solid transparent;
@@ -146,6 +147,10 @@ html[data-presenter="on"] .body { grid-template-columns: var(--rail-w) minmax(0,
 .sess-row[aria-current="page"] { background: rgba(68, 76, 231, .14); border-left-color: var(--uv-light); color: var(--off-white); }
 .sess-row .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sess-row small { grid-column: 2; color: var(--slate-300); font-family: var(--mono); font-size: .78em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sess-more { width: 2em; height: 2em; display: grid; place-items: center; color: var(--slate-300); flex-shrink: 0; }
+.sess-more:hover, .sess-more[aria-expanded="true"] { color: var(--indigo-100); background: rgba(68, 76, 231, .14); }
+.sess-more .dots { font-size: 1.1em; line-height: 1; }
+.sess-menu .menu { bottom: auto; top: calc(100% + .3em); left: auto; right: 0; min-width: 14em; }
 .side-foot { font-size: .75em; color: var(--slate-300); display: grid; gap: .3em; }
 .side-empty { font-size: .8em; color: var(--slate-300); padding: .5em; }
 .side-error { font-size: .8em; color: var(--yellow); padding: .5em; }
@@ -245,6 +250,7 @@ html[data-presenter="on"] .body { grid-template-columns: var(--rail-w) minmax(0,
   .slot-sheet { display: flex; gap: .5em; align-items: center; border-top: 1px solid var(--uv-light); background: rgba(13, 13, 16, .95); padding: .5em .8em; }
   .sheet-grab { font-family: var(--mono); font-size: .74em; font-weight: 500; padding: .55em .8em; border: 1px solid var(--uv-light); min-height: 44px; display: inline-flex; align-items: center; gap: .4em; }
   .btn, .toggle, .stop, .sess-row, .view { min-height: 44px; }
+  .sess-more { width: 44px; height: 44px; }
   .drawer .drawer-views { display: grid; gap: .3em; padding: .8em; border-top: 1px solid var(--border); }
   .drawer .drawer-views .view { border-color: var(--border); }
   .sheet { position: fixed; left: 0; right: 0; bottom: 0; max-height: 80dvh; z-index: 21; background: var(--ink); border-top: 1px solid var(--uv-light); display: grid; grid-template-rows: auto minmax(0, 1fr); }
@@ -260,6 +266,24 @@ html[data-presenter="on"] .body { grid-template-columns: var(--rail-w) minmax(0,
 .answer code { font-family: var(--mono); font-size: .85em; color: var(--cyan); }
 .answer pre { background: #111116; border: 1px solid var(--border); padding: .6em .8em; overflow-x: auto; font-size: .85em; }
 .answer pre code { color: var(--off-white); }
+/* Fence tokens, in the brand palette. The base color above is what uncolored text stays. */
+.answer pre .hljs-keyword,
+.answer pre .hljs-selector-tag { color: var(--purple); }
+.answer pre .hljs-built_in,
+.answer pre .hljs-title { color: var(--cyan); }
+.answer pre .hljs-string,
+.answer pre .hljs-doctag,
+.answer pre .hljs-addition { color: var(--green); }
+.answer pre .hljs-number,
+.answer pre .hljs-literal { color: var(--yellow); }
+.answer pre .hljs-comment,
+.answer pre .hljs-quote { color: var(--slate-300); }
+.answer pre .hljs-type,
+.answer pre .hljs-title.class_,
+.answer pre .hljs-attr { color: var(--indigo-200); }
+.answer pre .hljs-meta,
+.answer pre .hljs-meta .hljs-keyword,
+.answer pre .hljs-deletion { color: var(--pink); }
 .answer table { border-collapse: collapse; font-size: .9em; }
 .answer :is(th, td) { border: 1px solid var(--border); padding: .25em .5em; }
 .caret { display: inline-block; width: .5em; height: 1em; background: var(--green); vertical-align: -.15em; margin-left: .15em; }
