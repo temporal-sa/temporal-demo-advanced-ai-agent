@@ -87,13 +87,14 @@ class P1AgentTests(unittest.IsolatedAsyncioTestCase):
                 await support.send(handle, "set_posture", {"posture": "trust_safe"})
                 asks_before = len(events.collected.of("tool_approval_requested"))
                 await support.send(handle, "chat", {"text": (
-                    "Start two explorer subagents in parallel: ask one what a.txt contains and the "
-                    "other what b.txt contains. Then tell me both answers."
+                    "Run two explore tasks in parallel (two task calls in one response): ask one what "
+                    "a.txt contains and the other what b.txt contains. Then tell me both answers."
                 )})
                 await events.wait_for(lambda c: c.turn_ends() >= 3, timeout=300)
                 started = events.collected.of("subagent_started")
                 stopped = events.collected.of("subagent_stopped")
                 self.assertGreaterEqual(len(started), 2, [e.event for e in started])
+                self.assertEqual({e.event.agent_key for e in started}, {"explore"})
                 self.assertEqual(len(events.collected.of("tool_approval_requested")), asks_before)
                 self.assertEqual(len(stopped), len(started))
                 reply = chat_replies(events.collected)[-1]["text"].lower()
@@ -103,6 +104,67 @@ class P1AgentTests(unittest.IsolatedAsyncioTestCase):
 
                 status = await AgentClient(self.client, handle.id).get_status()
                 self.assertEqual(status.subagents, [])
+            await handle.signal("close")
+
+    async def test_general_subagent_writes_resumes_and_reports_changes(self) -> None:
+        """A general subagent edits the workspace, is resumed with a follow-up in the same turn
+        (same child, its context kept), and its edits reach the parent's Changes panel."""
+        async with support.running_worker(self.client, self.task_queue):
+            handle = await support.start_session(self.client, self.task_queue, model=SONNET, posture="never_ask")
+            async with support.EventCollector(self.client, handle.id) as events:
+                await support.send(handle, "chat", {"text": (
+                    "Use the task tool with a general subagent to create notes/fruit.txt containing the "
+                    "single word cherry. When it reports, call task again with resume set to its subagent "
+                    "id and ask it to append the word pie on a second line of the file it just made, "
+                    "without naming the file. Then read notes/fruit.txt yourself and quote it."
+                )})
+                await events.wait_for(lambda c: c.turn_ends() >= 1, timeout=360)
+            started = events.collected.of("subagent_started")
+            sent = events.collected.of("subagent_message_sent")
+            self.assertEqual([e.event.agent_key for e in started], ["general"], [e.event for e in started])
+            self.assertEqual([e.event.subagent_id for e in sent], [started[0].event.subagent_id] * 2)
+            self.assertEqual(len(events.collected.of("subagent_stopped")), 1)
+            changes = state_value(events.collected, "changes")
+            self.assertIn("notes/fruit.txt", {f["path"] for f in changes.get("files", [])}, changes)
+            reply = chat_replies(events.collected)[-1]["text"].lower()
+            self.assertIn("cherry", reply)
+            self.assertIn("pie", reply)
+            await handle.signal("close")
+
+    async def test_subagent_calls_ask_under_the_parent_posture(self) -> None:
+        """A general subagent runs under its parent's approval policy: under trust_safe its
+        gated call asks, the answer goes to the child's own tool_approval Update, and the
+        approved call runs once."""
+        from temporal_agent_harness.harness.agent_protocol import TOOL_APPROVAL_UPDATE, ToolApprovalDecision
+
+        async with support.running_worker(self.client, self.task_queue):
+            handle = await support.start_session(
+                self.client, self.task_queue, model=SONNET, posture="trust_safe", test_tools=True
+            )
+            async with support.EventCollector(self.client, handle.id) as events:
+                await support.send(handle, "chat", {"text": (
+                    "Use the task tool with a general subagent and tell it to call gated_echo once "
+                    "with text='from-child' and report the result. Then reply DONE."
+                )})
+                await events.wait_for(lambda c: c.of("subagent_started"), timeout=120)
+                child_id = events.collected.of("subagent_started")[0].event.workflow_id
+                child = self.client.get_workflow_handle(child_id)
+                async with support.EventCollector(self.client, child_id) as child_events:
+                    await child_events.wait_for(
+                        lambda c: any(e.event.tool_name == "gated_echo" for e in c.of("tool_approval_requested")),
+                        timeout=180,
+                    )
+                    ask = next(e for e in child_events.collected.of("tool_approval_requested") if e.event.tool_name == "gated_echo")
+                    await child.execute_update(
+                        TOOL_APPROVAL_UPDATE, ToolApprovalDecision(tool_id=ask.event.tool_id, approved=True)
+                    )
+                    await child_events.wait_for(
+                        lambda c: any(e.event.tool_name == "gated_echo" for e in c.of("tool_end")), timeout=120
+                    )
+                    ends = [e for e in child_events.collected.of("tool_end") if e.event.tool_name == "gated_echo"]
+                await events.wait_for(lambda c: c.turn_ends() >= 1, timeout=240)
+            self.assertEqual(len(ends), 1)
+            self.assertFalse([e for e in events.collected.of("tool_approval_requested") if e.event.tool_name == "task"])
             await handle.signal("close")
 
     async def test_steer_reaches_the_running_turn(self) -> None:

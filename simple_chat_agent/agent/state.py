@@ -142,46 +142,18 @@ def fold_tool_result(
     """Update the Changes and Workspace panels from one tool result.
 
     Duck-typed over the tool result models (see tools/workspace.py): anything with
-    ``changed_files`` (run_command), ``path`` with ``added_lines``/``removed_lines``
-    (write/edit), ``commit_hash`` (git_commit), or ``exit_code``.
+    ``changed_files`` (run_command, or a subagent's ``task`` with line counts), ``path`` with
+    ``added_lines``/``removed_lines`` (write/edit), ``commit_hash`` (git_commit), ``commits``
+    (``task``), or ``exit_code``.
     """
-    touched: list[tuple[str, str, int, int]] = []
-    if getattr(result, "path", None) and hasattr(result, "added_lines"):
-        status = "added" if getattr(result, "created", False) else "modified"
-        touched.append((result.path, status, result.added_lines or 0, result.removed_lines or 0))
-    for item in getattr(result, "changed_files", None) or []:
-        path = item.get("path") if isinstance(item, dict) else getattr(item, "path", None)
-        status = item.get("status", "modified") if isinstance(item, dict) else getattr(item, "status", "modified")
-        if path:
-            touched.append((path, _normalize_status(status), 0, 0))
-
+    touched = touched_files(result)
     if touched:
         with changes.mutate() as draft:
-            for path, status, added, removed in touched:
-                existing = next((f for f in draft.files if f.path == path), None)
-                if existing is None:
-                    draft.files.append(
-                        ChangedFile(path=path, status=status, added=added, removed=removed, tool_id=tool_id)
-                    )
-                else:
-                    existing.added += added
-                    existing.removed += removed
-                    existing.tool_id = tool_id
-                    if status == "deleted" or existing.status != "added":
-                        existing.status = status
-            if len(draft.files) > MAX_CHANGED_FILES:
-                del draft.files[: len(draft.files) - MAX_CHANGED_FILES]
-
-    # GitCommitResult reports `committed` and the new hash as `commit`.
-    commit_hash = getattr(result, "commit_hash", None) or (
-        getattr(result, "commit", None) if getattr(result, "committed", False) else None
-    )
-    if commit_hash:
+            merge_changes(draft, touched, [], tool_id=tool_id)
+    commits = new_commits(result, args)
+    if commits:
         with changes.mutate() as draft:
-            message = getattr(result, "message", "") or args.get("message", "") or getattr(result, "summary", "")
-            draft.commits.append(Commit(hash=str(commit_hash), message=str(message)[:300]))
-            if len(draft.commits) > MAX_COMMITS:
-                del draft.commits[: len(draft.commits) - MAX_COMMITS]
+            merge_changes(draft, [], commits, tool_id=tool_id)
 
     # git_status, git_commit and run_command report the branch; None means unknown, so the
     # last known branch stays.
@@ -197,6 +169,66 @@ def fold_tool_result(
     elif branch is not None and branch != workspace.current.branch:
         with workspace.mutate() as draft:
             draft.branch = branch
+
+
+def touched_files(result: Any) -> list[tuple[str, str, int, int]]:
+    """(path, status, added, removed) for each file a tool result says it changed."""
+    touched: list[tuple[str, str, int, int]] = []
+    if getattr(result, "path", None) and hasattr(result, "added_lines"):
+        status = "added" if getattr(result, "created", False) else "modified"
+        touched.append((result.path, status, result.added_lines or 0, result.removed_lines or 0))
+    for item in getattr(result, "changed_files", None) or []:
+        path = _field(item, "path")
+        if path:
+            status = _normalize_status(_field(item, "status", "modified"))
+            touched.append((path, status, _field(item, "added", 0) or 0, _field(item, "removed", 0) or 0))
+    return touched
+
+
+def new_commits(result: Any, args: dict[str, Any]) -> list[tuple[str, str]]:
+    """(hash, message) for each commit a tool result reports."""
+    # GitCommitResult reports `committed` and the new hash as `commit`.
+    commit_hash = getattr(result, "commit_hash", None) or (
+        getattr(result, "commit", None) if getattr(result, "committed", False) else None
+    )
+    commits: list[tuple[str, str]] = []
+    if commit_hash:
+        message = getattr(result, "message", "") or args.get("message", "") or getattr(result, "summary", "")
+        commits.append((str(commit_hash), str(message)))
+    for c in getattr(result, "commits", None) or []:
+        if getattr(c, "hash", None):
+            commits.append((str(c.hash), str(getattr(c, "message", ""))))
+    return commits
+
+
+def merge_changes(
+    draft: ChangesState,
+    touched: list[tuple[str, str, int, int]],
+    commits: list[tuple[str, str]],
+    *,
+    tool_id: str = "",
+) -> None:
+    """Fold touched files and commits into ``draft`` (in place), bounded."""
+    for path, status, added, removed in touched:
+        existing = next((f for f in draft.files if f.path == path), None)
+        if existing is None:
+            draft.files.append(ChangedFile(path=path, status=status, added=added, removed=removed, tool_id=tool_id))
+        else:
+            existing.added += added
+            existing.removed += removed
+            existing.tool_id = tool_id
+            if status == "deleted" or existing.status != "added":
+                existing.status = status
+    if len(draft.files) > MAX_CHANGED_FILES:
+        del draft.files[: len(draft.files) - MAX_CHANGED_FILES]
+    for hash_, message in commits:
+        draft.commits.append(Commit(hash=hash_, message=message[:300]))
+    if len(draft.commits) > MAX_COMMITS:
+        del draft.commits[: len(draft.commits) - MAX_COMMITS]
+
+
+def _field(item: Any, key: str, default: Any = None) -> Any:
+    return item.get(key, default) if isinstance(item, dict) else getattr(item, key, default)
 
 
 def _normalize_status(status: str) -> str:

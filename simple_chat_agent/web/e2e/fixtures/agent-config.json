@@ -264,7 +264,7 @@
   {
    "id": "never_ask",
    "label": "Never ask",
-   "description": "Every call runs without asking. Local development only."
+   "description": "Every call runs without asking."
   }
  ],
  "default_posture": "trust_safe",
@@ -307,7 +307,7 @@
   {
    "id": "never_ask",
    "label": "Never ask",
-   "description": "Every call runs without asking. Local development only.",
+   "description": "Every call runs without asking.",
    "available": true,
    "reason": null,
    "default": false
@@ -341,7 +341,6 @@
  "tool_risk_classes": {
   "create_artifact": "external_side_effect",
   "edit_file": "workspace_edit",
-  "explorer_investigate": "read_only",
   "fetch_url": "network",
   "git_commit": "shell",
   "git_diff": "read_only",
@@ -350,14 +349,10 @@
   "list_files": "read_only",
   "read_attachment": "read_only",
   "read_file": "read_only",
-  "reviewer_review": "read_only",
   "run_command": "shell",
   "search_code": "read_only",
   "search_web": "network",
-  "start_explorer": "read_only",
-  "start_reviewer": "read_only",
-  "stop_explorer": "read_only",
-  "stop_reviewer": "read_only",
+  "task": "read_only",
   "write_file": "workspace_edit"
  },
  "default_tool_risk_class": "external_side_effect",

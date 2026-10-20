@@ -123,7 +123,7 @@ export interface AgentCatalog {
   models: CatalogModel[];
   effort_options: Effort[];
   default_effort: Effort | null;
-  /** Only the postures allowed in this environment ("never_ask" is absent in the catalog). */
+  /** The postures this environment offers. */
   postures: PostureOption[];
   default_posture: Posture;
   research_tools: string[];

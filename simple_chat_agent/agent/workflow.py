@@ -42,6 +42,7 @@ with workflow.unsafe.imports_passed_through():
         STREAM_ACKED_SIGNAL,
         Ack,
         AlwaysAllowedForgotten,
+        ApprovalHistoryEntry,
         CarriedState,
         ChatAttachment,
         ChatMessage,
@@ -202,6 +203,10 @@ class CodingAgent:
         self._steer: list[str] = list(carried.steer_queue)
         self._stream_acked = carried.stream_acked
         self._stream = WorkflowStream(prior_state=carried.stream_state)
+        # This session's past human decisions on escalated calls, for the auto-mode judge
+        # (approvals.record_decision / approvals.recent_decisions_for). Restored before the
+        # runner is built, below, since its auto-mode evaluator reads this live.
+        self._approval_history: list[ApprovalHistoryEntry] = list(carried.approval_history)
         criteria = approvals.default_criteria(data.environment)
         session_id = data.session_id or workflow.info().workflow_id
         if data.environment == "catalog":
@@ -226,7 +231,11 @@ class CodingAgent:
             # an auto-mode policy without an evaluator). Judge tokens count toward this
             # session's spend caps.
             auto_mode_evaluator=approvals.build_evaluator(
-                data.environment, data.judge, session_id=session_id, owner_id=data.owner_id
+                data.environment,
+                data.judge,
+                session_id=session_id,
+                owner_id=data.owner_id,
+                history_provider=self._recent_approval_history,
             ),
         )
         self._updates_this_run = 0
@@ -259,7 +268,7 @@ class CodingAgent:
         self._snapshot: list[ModelMessage] | None = None
         self._rejected: list[dict[str, Any]] = []
         self._signals_this_run = 0
-        self._subagent_starts_in_flight = 0
+        self._tasks_in_flight = 0
         self._checkpoint_requested = False
         self._history_budget = (
             HistoryBudget(max_events=data.test_history_event_cap, fraction=1.0)
@@ -374,6 +383,7 @@ class CodingAgent:
             },
             steer_queue=self._steer,
             mcp_tools=mcp.carry_cache(self),
+            approval_history=self._approval_history,
         )
         next_config = AgentConfig(
             approval_policy=self._runner.approval_policy,
@@ -496,14 +506,26 @@ class CodingAgent:
 
     def _limit_remember(self, decision: ToolApprovalDecision) -> ToolApprovalDecision:
         """"Always allow" only for workspace edits (PRD A14): for shell, network and
-        external tools an approval applies to this one call."""
-        if not decision.remember:
-            return decision
+        external tools an approval applies to this one call.
+
+        Also records the decision into ``self._approval_history`` (see
+        ``approvals.record_decision``), so the auto-mode judge can recognize a future call
+        that looks like this one instead of escalating it too. Every decision that reaches a
+        person passes through here — the Signal front door and the harness Update alike (see
+        ``harness_ext.guard_tool_approval``) — so this is the one place to do it."""
         tool = harness_ext.pending_tool_name(self._runner, decision.tool_id) or ""
-        risk = approvals.risk_class_for(tool, self._runner.auto_approval_criteria)
-        if approvals.remember_allowed(risk):
-            return decision
-        return dataclasses.replace(decision, remember=False)
+        tool_input = harness_ext.pending_tool_input(self._runner, decision.tool_id)
+        if tool and tool_input is not None:
+            approvals.record_decision(
+                self._approval_history, tool, tool_input, approved=decision.approved, reason=decision.reason
+            )
+        return approvals.limit_remember(decision, tool, self._runner.auto_approval_criteria)
+
+    def _recent_approval_history(self, tool_name: str) -> list[ApprovalHistoryEntry]:
+        """This session's past decisions on ``tool_name``, for the auto-mode judge (see
+        ``approvals.build_evaluator``'s ``history_provider``). A bound method, not a
+        snapshot: it reads ``self._approval_history`` fresh on every call."""
+        return approvals.recent_decisions_for(self._approval_history, tool_name)
 
     def _is_duplicate(self, request_id: str) -> bool:
         if request_id in self._seen_requests:
@@ -597,6 +619,14 @@ class CodingAgent:
                     owner_id=self._data.owner_id,
                     session_id=self._data.session_id,
                     model=self._model,
+                    environment=self._data.environment,
+                    judge=self._data.judge,
+                    research_tools=self._data.research_tools,
+                    test_tools=self._data.test_tools,
+                ),
+                config=lambda: AgentConfig(
+                    approval_policy=self._runner.approval_policy,
+                    auto_approval_criteria=self._runner.auto_approval_criteria,
                 ),
             )
         if self._data.test_tools and self._data.environment == "local":
@@ -606,21 +636,20 @@ class CodingAgent:
         return tools
 
     def _before_tool(self, name: str) -> str | None:
-        if name.startswith("start_"):
-            # Count starts already in flight too: several start calls in one model response
-            # all pass this check before any of them registers its child.
-            running = len(harness_ext.active_subagent_ids(self._runner)) + self._subagent_starts_in_flight
-            if running >= MAX_CONCURRENT_SUBAGENTS:
+        if name == "task":
+            # Several task calls in one model response all pass this check before any of them
+            # starts its child, so count the calls in flight, not the children.
+            if self._tasks_in_flight >= MAX_CONCURRENT_SUBAGENTS:
                 return (
-                    f"At most {MAX_CONCURRENT_SUBAGENTS} subagents can run at once. Use or stop "
-                    "one that is running first."
+                    f"At most {MAX_CONCURRENT_SUBAGENTS} subagent tasks can run at once. Wait for "
+                    "the running ones to report, then send this one again."
                 )
-            self._subagent_starts_in_flight += 1
+            self._tasks_in_flight += 1
         return None
 
     def _after_call(self, name: str) -> None:
-        if name.startswith("start_"):
-            self._subagent_starts_in_flight -= 1
+        if name == "task":
+            self._tasks_in_flight -= 1
 
     def _after_tool(self, name: str, tool_id: str, args: dict[str, Any], result: Any) -> None:
         fold_tool_result(

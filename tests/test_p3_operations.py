@@ -169,7 +169,8 @@ class GatedEchoTests(unittest.TestCase):
             policy = approvals.policy_for(posture, "local", also_allow=approvals.SUBAGENT_TOOL_NAMES)
             self.assertNotIn("gated_echo", policy.auto_approve_tools, posture)
             self.assertFalse(policy.dangerously_skip_all_approvals, posture)
-        self.assertTrue(approvals.policy_for("never_ask", "local").dangerously_skip_all_approvals)
+        for env in ("local", "catalog"):
+            self.assertTrue(approvals.policy_for("never_ask", env).dangerously_skip_all_approvals)
 
     def test_runs_at_most_once_per_call(self) -> None:
         from simple_chat_agent.agent.tools.workspace import GATED_ECHO_CONFIG
@@ -274,12 +275,12 @@ class DemoBehaviourTests(unittest.TestCase):
             self.assertIsNotNone(verdict, command)
             self.assertEqual(verdict.details["pre_rule"], rule, command)
 
-    def test_instructions_cover_plan_explorers_reviewer_and_commit(self) -> None:
+    def test_instructions_cover_plan_subagents_and_commit(self) -> None:
         from simple_chat_agent.agent.prompts import CODING_AGENT_INSTRUCTIONS as text
 
-        for needle in ("update_plan", "start_explorer", "explorer_investigate", "start_reviewer",
-                       "reviewer_review", "git_commit", "never with `git commit` through run_command",
-                       "Don't start explorers for a simple question"):
+        for needle in ("update_plan", "task tool", "two explore tasks in parallel", "general task",
+                       "review task", "resume", "git_commit", "never with `git commit` through run_command",
+                       "Don't delegate a simple question"):
             self.assertIn(needle, text)
 
     def test_git_diff_of_a_commit(self) -> None:
@@ -292,6 +293,86 @@ class DemoBehaviourTests(unittest.TestCase):
         for bad in ("-p", "--output=/tmp/x", "HEAD..main", "a b", "$(id)", "x;rm", ""):
             self.assertFalse(_COMMIT_REF.fullmatch(bad), bad)
         self.assertEqual(GitDiffResult(staged=False, commit="HEAD").model_text(), "No changes in HEAD.")
+
+
+class _ApprovalEntryStub:
+    def __init__(self, tool_name: str, tool_input: dict[str, Any]) -> None:
+        self.tool_name = tool_name
+        self.tool_input = tool_input
+
+
+class _StatusWithEntries(_Status):
+    def __init__(self, policy: Any, entries: dict[str, _ApprovalEntryStub]) -> None:
+        super().__init__(policy)
+        self._entries = entries
+
+    def approval_entry(self, tool_id: str) -> Any:
+        return self._entries.get(tool_id)
+
+
+class ApprovalHistoryWiringTests(unittest.TestCase):
+    """The judge's "stop asking me about the same call" history: recorded by _limit_remember
+    (every decision that reaches a person, Signal and Update alike) and read back by
+    _recent_approval_history (approvals.build_evaluator's history_provider)."""
+
+    def agent(self, entries: dict[str, _ApprovalEntryStub], history: list[Any] | None = None) -> Any:
+        policy = approvals.policy_for("trust_safe", "local", also_allow=approvals.SUBAGENT_TOOL_NAMES)
+        runner = _Runner(policy)
+        runner._status = _StatusWithEntries(policy, entries)
+        return SimpleNamespace(_runner=runner, _approval_history=history if history is not None else [])
+
+    def limit_remember(self, agent: Any, decision: Any) -> Any:
+        return CodingAgent._limit_remember(agent, decision)
+
+    def test_records_an_approval(self) -> None:
+        from temporal_agent_harness.harness.agent_protocol import ToolApprovalDecision
+
+        entries = {"t1": _ApprovalEntryStub("edit_file", {"path": "a.py", "content": "x = 1"})}
+        agent = self.agent(entries)
+        self.limit_remember(agent, ToolApprovalDecision(tool_id="t1", approved=True, reason="looks fine"))
+        self.assertEqual(len(agent._approval_history), 1)
+        entry = agent._approval_history[0]
+        self.assertEqual(entry.tool_name, "edit_file")
+        self.assertTrue(entry.approved)
+        self.assertEqual(entry.reason, "looks fine")
+        self.assertIn("a.py", entry.args_summary)
+
+    def test_records_a_decline(self) -> None:
+        from temporal_agent_harness.harness.agent_protocol import ToolApprovalDecision
+
+        entries = {"t1": _ApprovalEntryStub("run_command", {"command": "rm -rf /"})}
+        agent = self.agent(entries)
+        self.limit_remember(agent, ToolApprovalDecision(tool_id="t1", approved=False, reason="too risky"))
+        self.assertEqual(len(agent._approval_history), 1)
+        self.assertFalse(agent._approval_history[0].approved)
+
+    def test_unknown_tool_id_records_nothing(self) -> None:
+        from temporal_agent_harness.harness.agent_protocol import ToolApprovalDecision
+
+        agent = self.agent({})
+        self.limit_remember(agent, ToolApprovalDecision(tool_id="missing", approved=True, reason=None))
+        self.assertEqual(agent._approval_history, [])
+
+    def test_still_limits_remember_to_workspace_edits(self) -> None:
+        from temporal_agent_harness.harness.agent_protocol import ToolApprovalDecision
+
+        entries = {"t1": _ApprovalEntryStub("run_command", {"command": "pytest"})}
+        agent = self.agent(entries)
+        decision = self.limit_remember(
+            agent, ToolApprovalDecision(tool_id="t1", approved=True, reason=None, remember=True)
+        )
+        self.assertFalse(decision.remember)  # shell isn't in REMEMBER_ALLOWED_CRITERIA
+        self.assertEqual(len(agent._approval_history), 1)  # recorded regardless
+
+    def test_recent_approval_history_reads_it_back_for_the_judge(self) -> None:
+        history = [
+            approvals.ApprovalHistoryEntry(tool_name="edit_file", args_summary="{}", approved=True, reason=""),
+            approvals.ApprovalHistoryEntry(tool_name="run_command", args_summary="{}", approved=False, reason=""),
+        ]
+        agent = self.agent({}, history=list(history))
+        result = CodingAgent._recent_approval_history(agent, "edit_file")
+        self.assertEqual(result, [history[0]])
+        self.assertEqual(CodingAgent._recent_approval_history(agent, "search_code"), [])
 
 
 class PlanReminderTests(unittest.TestCase):

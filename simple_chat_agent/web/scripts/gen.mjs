@@ -31,8 +31,7 @@ const SCHEMA_OUT = join(OUT, "schema");
 // The agents the product view talks to. `file` names the raw schema file.
 const AGENTS = [
   { name: "CodingAgent", target: "simple_chat_agent.agent.workflow:CodingAgent", file: "coding-agent" },
-  { name: "ExplorerAgent", target: "simple_chat_agent.agent.subagents:ExplorerAgent", file: "explorer-agent" },
-  { name: "ReviewerAgent", target: "simple_chat_agent.agent.subagents:ReviewerAgent", file: "reviewer-agent" },
+  { name: "TaskAgent", target: "simple_chat_agent.agent.subagents:TaskAgent", file: "task-agent" },
 ];
 
 const BANNER = [

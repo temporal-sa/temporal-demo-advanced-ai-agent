@@ -194,7 +194,7 @@ class OwnershipTests(ConsoleTestBase):
     def test_foreign_session_and_subagents_are_404(self) -> None:
         sid = self.create(A)
         sub = f"{sid}-subagent-{uuid.uuid4().hex[:8]}"
-        self.temporal.workflows[sub] = FakeWorkflow("ExplorerAgent", parent_id=sid)
+        self.temporal.workflows[sub] = FakeWorkflow("TaskAgent", parent_id=sid)
         self.assert_all_404(sid, B)
         self.assert_all_404(sub, B)
         # Nothing reached Temporal or the bridge for bob.
@@ -207,7 +207,7 @@ class OwnershipTests(ConsoleTestBase):
     def test_owner_reaches_delegated_routes(self) -> None:
         sid = self.create(A)
         sub = f"{sid}-subagent-1"
-        self.temporal.workflows[sub] = FakeWorkflow("ReviewerAgent", parent_id=sid)
+        self.temporal.workflows[sub] = FakeWorkflow("TaskAgent", parent_id=sid)
         for wid in (sid, sub):
             with self.subTest(wid=wid):
                 self.assertEqual(self.client.get(f"/console/api/status/{wid}", headers=A).status_code, 200)
@@ -337,13 +337,16 @@ class ReviewFixTests(ConsoleTestBase):
 class FlagTests(unittest.TestCase):
     def test_flag_defaults(self) -> None:
         cases = [
+            ({}, True),
+            ({"AGENT_ENVIRONMENT": "catalog"}, True),
             ({"AGENT_ENVIRONMENT": "local"}, True),
-            ({"AGENT_ENVIRONMENT": "catalog"}, False),
-            ({}, False),  # the default environment is the catalog
-            ({"AGENT_ENVIRONMENT": "catalog", "CONSOLE_ENABLED": "true"}, True),
-            ({"AGENT_ENVIRONMENT": "local", "CONSOLE_ENABLED": "false"}, False),
+            ({"CONSOLE_ENABLED": "true"}, True),
+            ({"CONSOLE_ENABLED": "1"}, True),
+            ({"CONSOLE_ENABLED": ""}, True),
+            ({"AGENT_ENVIRONMENT": "catalog", "CONSOLE_ENABLED": "false"}, False),
             ({"AGENT_ENVIRONMENT": "local", "CONSOLE_ENABLED": "0"}, False),
-            ({"AGENT_ENVIRONMENT": "local", "CONSOLE_ENABLED": ""}, True),
+            ({"CONSOLE_ENABLED": "off"}, False),
+            ({"CONSOLE_ENABLED": "no"}, False),
         ]
         for env, expected in cases:
             with self.subTest(env=env), mock.patch.dict(os.environ, env, clear=False):
@@ -355,8 +358,8 @@ class FlagTests(unittest.TestCase):
     @unittest.skipIf(DIST is None, "harness console assets not installed")
     def test_mount_follows_the_flag(self) -> None:
         for env, mounted in (
-            ({"AGENT_ENVIRONMENT": "catalog", "CONSOLE_ENABLED": ""}, False),
-            ({"AGENT_ENVIRONMENT": "catalog", "CONSOLE_ENABLED": "1"}, True),
+            ({"AGENT_ENVIRONMENT": "catalog", "CONSOLE_ENABLED": ""}, True),
+            ({"AGENT_ENVIRONMENT": "catalog", "CONSOLE_ENABLED": "off"}, False),
             ({"AGENT_ENVIRONMENT": "local", "CONSOLE_ENABLED": ""}, True),
         ):
             with self.subTest(env=env), mock.patch.dict(os.environ, env):

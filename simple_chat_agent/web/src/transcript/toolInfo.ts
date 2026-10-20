@@ -38,15 +38,8 @@ export function toolBadge(name: string): ToolBadge {
   return BADGES[name] ?? { label: "Tool", kind: "read" };
 }
 
-/** The parent's tools that drive subagents. The subagent row shows them instead. */
-export const SUBAGENT_TOOLS: ReadonlySet<string> = new Set([
-  "start_explorer",
-  "explorer_investigate",
-  "stop_explorer",
-  "start_reviewer",
-  "reviewer_review",
-  "stop_reviewer",
-]);
+/** The parent's tool that runs subagents. The subagent row shows it instead. */
+export const SUBAGENT_TOOLS: ReadonlySet<string> = new Set(["task"]);
 
 /** Read-only tools whose consecutive calls fold into one row ("Read file × 3"). */
 export const GROUPABLE: Readonly<Record<string, string>> = {

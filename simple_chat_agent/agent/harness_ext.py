@@ -927,6 +927,14 @@ def pending_tool_name(runner: AgentWorkflowRunner, tool_id: str) -> str | None:
     return entry.tool_name if entry is not None else None
 
 
+def pending_tool_input(runner: AgentWorkflowRunner, tool_id: str) -> dict[str, Any] | None:
+    """The arguments of a pending approval (``_WorkflowStatus.approval_entry``); ``None`` for
+    an unknown ``tool_id``. Entries are retained after resolution too (same as
+    :func:`pending_tool_name`), so this also answers for a call that has already been decided."""
+    entry = runner._status.approval_entry(tool_id)
+    return entry.tool_input if entry is not None else None
+
+
 def guard_tool_approval(
     runner: AgentWorkflowRunner,
     adjust: Callable[[ToolApprovalDecision], ToolApprovalDecision],

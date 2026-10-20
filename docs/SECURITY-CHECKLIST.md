@@ -17,6 +17,7 @@ Status as of P5 (2026-10-16):
 | Irreversible approve escalates | `tests/test_approvals.py::Decide::test_irreversible_approve_escalates` |
 | Deterministic pre-rules (curl, wget, nc, ssh, git push, base64, `.git/hooks`, CI config, env dumps) escalate without a judge call | `tests/test_approvals.py::PreRules::test_positives_escalate_with_the_expected_rule`, `::test_at_least_thirty_cases`, `::test_never_approves_or_denies`, `::test_oversized_input_escalates_unscreened`; `tests/test_approvals.py::EvaluatorInWorkflow::test_pre_rule_escalates_without_judge_call`; `tests/test_p3_operations.py::DemoBehaviourTests::test_exfiltration_through_the_same_pipes_still_escalates` |
 | "APPROVED BY REVIEWER" injection escalates; args fenced as data | `tests/test_approvals.py::EvaluatorInWorkflow::test_injection_in_args_escalates_even_if_judge_would_approve`; `tests/test_approvals.py::Prompt::test_args_are_fenced_as_data`, `::test_tool_description_is_excluded`, `::test_bad_nonce_rejected` |
+| The judge's approval history (past human decisions on the same tool, for similarity) is fenced and treated as untrusted data, same as the arguments it's built from | `tests/test_approvals.py::ApprovalHistory::test_history_section_is_fenced_and_untrusted` |
 | A judge APPROVE counts only in an allowed criteria set | `tests/test_approvals.py::Decide::test_catalog_approves_only_read_only_and_workspace_edit` |
 | No spend account, or cap reached: escalate without a model call | `tests/test_approvals.py::EvaluatorInWorkflow::test_no_spend_account_escalates_without_judge_call`, `::test_spend_blocked_verdict_escalates` |
 
@@ -32,7 +33,7 @@ Status as of P5 (2026-10-16):
 | MCP and artifacts are `external_side_effect` | `tests/test_mcp.py::ToolsetTests::test_default_risk_class_is_external_side_effect`; `tests/test_tools_artifacts.py::ToolDefinitionTests::test_risk_classes` |
 | In the catalog the judge approves only `read_only` and `workspace_edit`; shell and commit go to a human | `tests/test_approvals.py::CriteriaAndPostures::test_judge_approvable_classes`, `::test_git_commit_needs_a_human_in_catalog`; `tests/test_approvals.py::EvaluatorInWorkflow::test_catalog_shell_goes_to_human_without_judge_call`, `::test_catalog_git_commit_goes_to_human_without_judge_call` |
 | The catalog refuses a caller's policy that pre-allows risky tools | `tests/test_approvals.py::CriteriaAndPostures::test_catalog_refuses_preallowing_risky_tools` |
-| "Never ask" is refused in the catalog | `tests/test_approvals.py::CriteriaAndPostures::test_never_ask_refused_in_catalog`; `tests/test_agent_routes.py::ProductViewConfigTests::test_create_refuses_postures_the_menu_greys_out`, `::test_set_posture_message_refuses_the_same` |
+| "Never ask" skips every approval, in the catalog and locally | `tests/test_approvals.py::CriteriaAndPostures::test_posture_mapping`; `tests/test_agent_routes.py::ProductViewConfigTests::test_posture_menu_catalog`, `::test_set_posture_message_refuses_the_same` |
 
 ## §5.3 The model can't change its own guardrails
 
@@ -88,7 +89,8 @@ Status as of P5 (2026-10-16):
 | Context fitting (A17): a 200-turn session stays under 85% of the window | `tests/test_context.py::LongSessionTests::test_200_turn_session_never_exceeds_85_percent`; `tests/test_context.py::FitHistoryPropertyTests::test_randomized_histories_keep_invariants_and_are_idempotent` |
 | History budget (A20): checkpoint at 60% of the caps | `tests/test_budget.py::HistoryBudgetTests` (7 tests) |
 | Spend caps (A21) block, and fail closed when Redis is down | `tests/test_budget.py::SpendGuardRedisTests::test_session_cap`, `::test_user_day_cap_and_day_rollover`, `::test_global_breaker_blocks_everyone`; `tests/test_budget.py::SpendGuardFailClosedTests::test_check_fails_closed_when_redis_is_down`, `::test_from_env_fails_closed_on_dead_url` |
-| Subagent depth 1: children get read-only tools and no subagent tools | `tests/test_security_rules.py::SubagentDepthTests::test_children_get_read_only_tools_only` (P5) |
+| Subagent depth 1: no child gets `task`, browser callbacks or artifacts; explore and review children get read-only tools only | `tests/test_security_rules.py::SubagentDepthTests::test_no_child_can_start_an_agent_or_ask_the_user`, `::test_read_only_types_get_read_only_tools_only`, `::test_general_gets_session_research_tools_and_test_tools_only_locally` |
+| A subagent's gated calls ask under its parent's approval policy (vetted again in the catalog) | `tests/integration/test_p1_agent.py::P1AgentTests::test_subagent_calls_ask_under_the_parent_posture` (integration) |
 
 ## §5.8 Retry policies by class
 

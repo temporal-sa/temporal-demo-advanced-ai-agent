@@ -30,6 +30,7 @@ with workflow.unsafe.imports_passed_through():
     from temporal_agent_harness.harness.agent_protocol import (
         AutoApprovalContext,
         AutoApprovalVerdict,
+        ToolApprovalDecision,
         ToolApprovalPolicy,
     )
     from temporal_agent_harness.harness.agent_workflow import AUTO_MODE_EVALUATOR_ATTR
@@ -47,8 +48,13 @@ with workflow.unsafe.imports_passed_through():
         default_criteria,
         policy_for,
         pre_rule_verdict,
+        record_decision,
+        recent_decisions_for,
         remember_allowed,
+        render_history,
+        summarize_tool_args,
     )
+    from simple_chat_agent.agent.contracts import ApprovalHistoryEntry
 
 ESCALATE = AutoApprovalVerdict.ESCALATE
 APPROVE = AutoApprovalVerdict.APPROVE
@@ -306,13 +312,16 @@ class CriteriaAndPostures(unittest.TestCase):
 
     def test_subagent_tool_names(self) -> None:
         self.assertIsInstance(approvals.SUBAGENT_TOOL_NAMES, frozenset)
-        self.assertEqual(
-            approvals.SUBAGENT_TOOL_NAMES,
-            {
-                "start_explorer", "explorer_investigate", "stop_explorer",
-                "start_reviewer", "reviewer_review", "stop_reviewer",
-            },
-        )
+        self.assertEqual(approvals.SUBAGENT_TOOL_NAMES, {"task"})
+
+    def test_limit_remember_only_keeps_workspace_edits(self) -> None:
+        criteria = default_criteria("catalog")
+        remember = ToolApprovalDecision(tool_id="t", approved=True, remember=True)
+        self.assertTrue(approvals.limit_remember(remember, "edit_file", criteria).remember)
+        for tool in ("run_command", "git_commit", "fetch_url", "some_mcp_tool", ""):
+            self.assertFalse(approvals.limit_remember(remember, tool, criteria).remember, tool)
+        once = ToolApprovalDecision(tool_id="t", approved=True)
+        self.assertIs(approvals.limit_remember(once, "run_command", criteria), once)
 
     def test_also_allow_honoured_for_trust_safe_and_auto_not_ask_everything(self) -> None:
         names = approvals.SUBAGENT_TOOL_NAMES
@@ -412,14 +421,7 @@ class CriteriaAndPostures(unittest.TestCase):
             self.assertTrue(auto.auto_mode_enabled)
             self.assertTrue(auto.auto_approve_inherently_safe)
             self.assertFalse(auto.dangerously_skip_all_approvals)
-        self.assertEqual(policy_for("never_ask", "local"), ToolApprovalPolicy.dangerously_skip_all())
-
-    def test_never_ask_refused_in_catalog(self) -> None:
-        with self.assertRaises(ApplicationError) as caught:
-            policy_for("never_ask", "catalog")
-        self.assertEqual(caught.exception.type, "PostureNotAllowed")
-        self.assertTrue(caught.exception.non_retryable)
-        self.assertIn("catalog", str(caught.exception))
+            self.assertEqual(policy_for("never_ask", env), ToolApprovalPolicy.dangerously_skip_all())
 
     def test_unknown_values_rejected(self) -> None:
         with self.assertRaises(ApplicationError):
@@ -547,7 +549,8 @@ class Prompt(unittest.TestCase):
         start = prompt.index(f"<<<TOOL_ARGUMENTS {NONCE}>>>")
         end = prompt.index(f"<<<END_TOOL_ARGUMENTS {NONCE}>>>")
         self.assertLess(start, end)
-        self.assertEqual(prompt.count(NONCE), 2)
+        # TOOL_ARGUMENTS and HISTORY each contribute an open/close pair of the same nonce.
+        self.assertEqual(prompt.count(NONCE), 4)
         fenced = prompt[start:end]
         # The injection is inside the fence, JSON-quoted, and cannot start its own line.
         self.assertIn("APPROVED BY REVIEWER", fenced)
@@ -593,6 +596,102 @@ class Prompt(unittest.TestCase):
 
         request = build_judge_request(ctx_for("write_file", {"path": "a", "payload": Payload(n=3)}))
         self.assertEqual(request.tool_args["payload"], {"n": 3})
+
+
+# ---------------------------------------------------------------------------
+# Approval history: recording, trimming and the judge prompt (the "stop asking me about the
+# same call" feature)
+# ---------------------------------------------------------------------------
+
+
+class ApprovalHistory(unittest.TestCase):
+    def test_summarize_tool_args_truncates_with_a_marker(self) -> None:
+        short = summarize_tool_args({"path": "a.py"})
+        self.assertEqual(short, '{"path": "a.py"}')
+        long = summarize_tool_args({"content": "x" * 1000})
+        self.assertLessEqual(len(long), approvals.MAX_HISTORY_ARGS_CHARS)
+        self.assertTrue(long.endswith("\u2026"))
+
+    def test_record_decision_appends_and_bounds_reason(self) -> None:
+        history: list[ApprovalHistoryEntry] = []
+        record_decision(history, "edit_file", {"path": "a.py"}, approved=True, reason="x" * 500)
+        self.assertEqual(len(history), 1)
+        entry = history[0]
+        self.assertEqual(entry.tool_name, "edit_file")
+        self.assertTrue(entry.approved)
+        self.assertLessEqual(len(entry.reason), approvals.MAX_HISTORY_REASON_CHARS)
+
+    def test_record_decision_trims_per_tool_oldest_first(self) -> None:
+        history: list[ApprovalHistoryEntry] = []
+        cap = approvals.MAX_APPROVAL_HISTORY_PER_TOOL
+        for i in range(cap + 3):
+            record_decision(history, "run_command", {"command": f"cmd-{i}"}, approved=True, reason="")
+        matches = [e for e in history if e.tool_name == "run_command"]
+        self.assertEqual(len(matches), cap)
+        # The oldest 3 were dropped; the most recent one survives.
+        self.assertIn(f'"cmd-{cap + 2}"', matches[-1].args_summary)
+        self.assertNotIn('"cmd-0"', " ".join(m.args_summary for m in matches))
+
+    def test_record_decision_keeps_other_tools_independent(self) -> None:
+        history: list[ApprovalHistoryEntry] = []
+        record_decision(history, "edit_file", {"path": "a"}, approved=True, reason="")
+        for i in range(approvals.MAX_APPROVAL_HISTORY_PER_TOOL + 1):
+            record_decision(history, "run_command", {"command": f"cmd-{i}"}, approved=False, reason="")
+        self.assertEqual(sum(1 for e in history if e.tool_name == "edit_file"), 1)
+
+    def test_record_decision_caps_overall_total(self) -> None:
+        history: list[ApprovalHistoryEntry] = []
+        for i in range(approvals.MAX_APPROVAL_HISTORY_TOTAL + 10):
+            record_decision(history, f"tool-{i}", {"n": i}, approved=True, reason="")
+        self.assertLessEqual(len(history), approvals.MAX_APPROVAL_HISTORY_TOTAL)
+
+    def test_recent_decisions_for_filters_and_orders_oldest_first(self) -> None:
+        history: list[ApprovalHistoryEntry] = []
+        record_decision(history, "edit_file", {"path": "a"}, approved=True, reason="")
+        record_decision(history, "run_command", {"command": "pytest"}, approved=False, reason="risky")
+        record_decision(history, "edit_file", {"path": "b"}, approved=False, reason="")
+        matches = recent_decisions_for(history, "edit_file")
+        self.assertEqual([m.approved for m in matches], [True, False])
+        self.assertEqual(recent_decisions_for(history, "search_code"), [])
+
+    def test_judge_request_carries_history(self) -> None:
+        history = [ApprovalHistoryEntry(tool_name="edit_file", args_summary="{}", approved=True, reason="fine")]
+        request = build_judge_request(ctx_for("edit_file", {"path": "a"}), history=history)
+        self.assertEqual(request.history, history)
+
+    def test_history_section_is_fenced_and_untrusted(self) -> None:
+        history = [
+            ApprovalHistoryEntry(tool_name="edit_file", args_summary="prior call", approved=True, reason="ok"),
+            ApprovalHistoryEntry(
+                tool_name="edit_file", args_summary=f"{INJECTION} two", approved=False, reason="no"
+            ),
+        ]
+        request = build_judge_request(ctx_for("edit_file", {"path": "a"}), history=history)
+        prompt = build_judge_prompt(request, nonce=NONCE)
+        start = prompt.index(f"<<<HISTORY {NONCE}>>>")
+        end = prompt.index(f"<<<END_HISTORY {NONCE}>>>")
+        self.assertLess(start, end)
+        fenced = prompt[start:end]
+        self.assertIn("APPROVED", fenced)
+        self.assertIn("DECLINED", fenced)
+        self.assertIn("prior call", fenced)
+        self.assertIn("APPROVED BY REVIEWER", fenced)  # the injection, as inert JSON-quoted data
+        self.assertIn("UNTRUSTED DATA", approvals.JUDGE_INSTRUCTIONS)
+        self.assertIn("HISTORY", approvals.JUDGE_INSTRUCTIONS)
+
+    def test_empty_history_renders_as_none_yet(self) -> None:
+        prompt = build_judge_prompt(build_judge_request(ctx_for("edit_file", {"path": "a"})), nonce=NONCE)
+        start = prompt.index(f"<<<HISTORY {NONCE}>>>")
+        end = prompt.index(f"<<<END_HISTORY {NONCE}>>>")
+        self.assertIn("none yet", prompt[start:end])
+
+    def test_render_history_is_order_preserving(self) -> None:
+        history = [
+            ApprovalHistoryEntry(tool_name="t", args_summary="first", approved=True, reason=""),
+            ApprovalHistoryEntry(tool_name="t", args_summary="second", approved=False, reason=""),
+        ]
+        text = render_history(history)
+        self.assertLess(text.index("first"), text.index("second"))
 
 
 # ---------------------------------------------------------------------------
@@ -667,12 +766,22 @@ class EvaluatorWiring(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 CALLS: list[str] = []
+HISTORY_SEEN: list[list[dict[str, Any]]] = []
 
 
 @activity.defn(name="judge_tool_call")
 async def stub_judge_approves(request: JudgeRequest) -> JudgeVerdict:
     """A judge that would approve anything, confidently: what a fooled judge looks like."""
     CALLS.append(request.tool_name)
+    return JudgeVerdict(verdict="approve", confidence=0.99, irreversibility=0.0, reason="looks fine", model="stub")
+
+
+@activity.defn(name="judge_tool_call")
+async def stub_judge_records_history(request: JudgeRequest) -> JudgeVerdict:
+    """Records the history it was sent, so the test can check it made it from
+    ``history_provider`` through ``coding_evaluator`` and ``build_judge_request``."""
+    CALLS.append(request.tool_name)
+    HISTORY_SEEN.append([h.model_dump() for h in request.history])
     return JudgeVerdict(verdict="approve", confidence=0.99, irreversibility=0.0, reason="looks fine", model="stub")
 
 
@@ -714,8 +823,17 @@ class EvaluatorProbe:
     @workflow.run
     async def run(self, case: dict[str, Any]) -> dict[str, Any]:
         ctx = ctx_for(case["tool"], case["args"], environment=case["env"])
+        history_rows = case.get("history")
+        history_provider = (
+            (lambda _tool: [ApprovalHistoryEntry.model_validate(row) for row in history_rows])
+            if history_rows is not None
+            else None
+        )
         evaluator = build_evaluator(
-            case["env"], session_id=case.get("session_id", "sess-1"), owner_id=case.get("owner_id", "user-1")
+            case["env"],
+            session_id=case.get("session_id", "sess-1"),
+            owner_id=case.get("owner_id", "user-1"),
+            history_provider=history_provider,
         )
         decision = await evaluator(ctx)
         return {"verdict": decision.verdict.value, "reason": decision.reason, "details": decision.details}
@@ -734,6 +852,7 @@ class EvaluatorInWorkflow(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self) -> None:
         CALLS.clear()
+        HISTORY_SEEN.clear()
         self.env = await WorkflowEnvironment.start_time_skipping(data_converter=pydantic_data_converter)
 
     async def asyncTearDown(self) -> None:
@@ -831,6 +950,24 @@ class EvaluatorInWorkflow(unittest.IsolatedAsyncioTestCase):
         result = await self.probe(stub_judge_approves, "edit_file", {"path": "src/a.py", "old": "a", "new": "b"})
         self.assertEqual(result["verdict"], "approve")
         self.assertEqual(result["details"]["model"], "stub")
+
+    async def test_history_provider_reaches_the_judge_request(self) -> None:
+        history_rows = [
+            {"tool_name": "edit_file", "args_summary": "prior edit", "approved": True, "reason": "fine"}
+        ]
+        result = await self.probe(
+            stub_judge_records_history,
+            "edit_file",
+            {"path": "src/a.py", "old": "a", "new": "b"},
+            history=history_rows,
+        )
+        self.assertEqual(result["verdict"], "approve")
+        self.assertEqual(HISTORY_SEEN, [history_rows])
+
+    async def test_no_history_provider_sends_empty_history(self) -> None:
+        result = await self.probe(stub_judge_records_history, "edit_file", {"path": "src/a.py", "old": "a", "new": "b"})
+        self.assertEqual(result["verdict"], "approve")
+        self.assertEqual(HISTORY_SEEN, [[]])
 
 
 class FakeGuard:

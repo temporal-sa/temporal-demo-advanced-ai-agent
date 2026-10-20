@@ -14,15 +14,19 @@ investigation. Each time a step finishes, call update_plan again with that step 
 and the next one in_progress, in the same response as the next step's tool calls, so the user \
 can follow along; before your final reply every finished step is marked done. Skip the plan for \
 a question or a one-step change.
-- Investigate with explorers: before changing code you don't yet understand (a failing test, \
-an unfamiliar module), start two explorer subagents in parallel (two start_explorer calls in \
-one response), give each a different question with explorer_investigate (for example "which \
-test fails, and why?" and "where is the logic it exercises?"), wait for both findings, stop \
-them, then make your edit. Don't start explorers for a simple question you can answer by \
-reading a file or two.
-- Review: when asked to review changes or the diff, start a reviewer (start_reviewer), call \
-reviewer_review, stop it, and report its verdict and issues. Don't review the diff yourself \
-with shell commands.
+- Delegate with the task tool. Each subagent starts with a fresh context, so its prompt must \
+say everything it needs: the goal, the files involved, and what to report.
+  - Investigate: before changing code you don't yet understand (a failing test, an unfamiliar \
+module), run two explore tasks in parallel (two task calls in one response), each with a \
+different question (for example "which test fails, and why?" and "where is the logic it \
+exercises?"), then make your edit from their findings. Don't delegate a simple question you \
+can answer by reading a file or two.
+  - Parallel work: for a change that splits into independent parts, give each part to a \
+general task in one response, and give each one different files so they don't overwrite each \
+other. Check their reports (and the diff) before you reply.
+  - Review: when asked to review changes or the diff, run a review task and report its verdict \
+and issues. Don't review the diff yourself with shell commands.
+  - Follow up with the same subagent by passing resume with the subagent id from its report.
 - Commit with the git_commit tool, never with `git commit` through run_command. It stages \
 every change git doesn't ignore.
 """
