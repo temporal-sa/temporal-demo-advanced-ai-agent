@@ -43,6 +43,9 @@ export interface CarriedState {
   };
   steer_queue?: string[];
   pending_messages?: FrontDoorMessage[];
+  mcp_tools?: {
+    [k: string]: unknown | undefined;
+  }[];
 }
 /**
  * Serializable snapshot of stream state for continue-as-new.
@@ -418,21 +421,6 @@ export interface CodingAgentInit {
   test_history_event_cap?: number | null;
 }
 /**
- * One place in the code that supports the answer.
- */
-export interface Evidence {
-  path: string;
-  line: number | null;
-  note: string;
-}
-/**
- * The explorer's answer, with the code that supports it.
- */
-export interface Findings {
-  answer: string;
-  evidence: Evidence[];
-}
-/**
  * Forget the "always allow" approvals given in this session (no fields).
  */
 export interface ForgetAlwaysAllowed {}
@@ -485,19 +473,6 @@ export interface PlanState {
   items: PlanItem[];
 }
 /**
- * A question about the codebase for the explorer to answer from the files.
- */
-export interface Question {
-  /**
-   * What to find out. Be specific.
-   */
-  question: string;
-  /**
-   * Where to start looking, if known.
-   */
-  paths?: string[];
-}
-/**
  * The reviewer's verdict on the diff.
  */
 export interface Review {
@@ -507,16 +482,6 @@ export interface Review {
   verdict: string;
   summary: string;
   issues: Issue[];
-}
-/**
- * Ask the reviewer to review the workspace's changes: the uncommitted diff, or the last
- * commit when nothing is uncommitted.
- */
-export interface ReviewRequest {
-  /**
-   * What to pay most attention to, if anything.
-   */
-  focus?: string;
 }
 /**
  * Switch provider and/or model. Applies from the next turn.
@@ -557,13 +522,54 @@ export interface SteerMessage {
   text: string;
 }
 /**
- * What a subagent starts with: the parent's workspace and identity, and its model.
+ * What a subagent starts with: its type and model, and the parent's workspace, identity
+ * and session settings.
  */
 export interface SubagentInit {
+  subagent_type?: "general" | "explore" | "review";
   workspace_id: string;
   owner_id?: string;
   session_id?: string;
   model?: ModelChoice;
+  environment?: "catalog" | "local";
+  judge?: "llm" | "jev";
+  research_tools?: string[];
+  test_tools?: boolean;
+}
+/**
+ * A local commit a subagent made.
+ */
+export interface TaskCommit {
+  hash: string;
+  message: string;
+}
+/**
+ * A file a subagent changed while it worked.
+ */
+export interface TaskFileChange {
+  path: string;
+  status: string;
+  added: number;
+  removed: number;
+}
+/**
+ * What the parent sends a subagent: one task to work on until done.
+ */
+export interface TaskRequest {
+  description?: string;
+  prompt: string;
+}
+/**
+ * A subagent's report on its task. ``text`` is its final message; the parent's Changes
+ * panel folds in ``changed_files`` and ``commits``.
+ */
+export interface TaskResult {
+  subagent_id: string;
+  subagent_type: "general" | "explore" | "review";
+  text: string;
+  review: Review | null;
+  changed_files: TaskFileChange[];
+  commits: TaskCommit[];
 }
 /**
  * What the workspace's terminal did last, and the branch it is on.

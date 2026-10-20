@@ -54,7 +54,7 @@ POSTURES: dict[Posture, tuple[str, str]] = {
     "ask_everything": ("Ask for everything", "Every tool call waits for you."),
     "trust_safe": ("Trust safe tools", "Read-only tools run; everything else waits for you."),
     "auto": ("Auto mode", "Read-only tools run; a judge decides the rest and asks you when unsure."),
-    "never_ask": ("Never ask", "Every call runs without asking. Local development only."),
+    "never_ask": ("Never ask", "Every call runs without asking."),
 }
 DEFAULT_POSTURE: Posture = "trust_safe"
 
@@ -82,8 +82,9 @@ def default_model() -> ModelChoice:
 
 
 def postures_for(environment: str) -> list[Posture]:
-    """``never_ask`` is offered only outside the catalog."""
-    return [p for p in POSTURES if p != "never_ask" or environment == "local"]
+    """Every posture, in menu order. Available in the catalog and locally alike."""
+    del environment  # callers still pass where the session runs; it no longer filters
+    return list(POSTURES)
 
 
 def _model_entry(provider: Provider, model: str) -> dict[str, Any]:

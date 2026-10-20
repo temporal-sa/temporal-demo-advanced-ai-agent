@@ -13,6 +13,8 @@ from pydantic import BaseModel, Field
 from temporalio.contrib.workflow_streams import WorkflowStreamState
 
 AGENT_WORKFLOW_TYPE = "CodingAgent"
+# The subagent workflow the ``task`` tool starts (agent/subagents.py).
+TASK_AGENT_WORKFLOW_TYPE = "TaskAgent"
 
 Provider = Literal["anthropic", "openai", "google"]
 Posture = Literal["ask_everything", "trust_safe", "auto", "never_ask"]
@@ -52,6 +54,22 @@ class FrontDoorMessage(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class ApprovalHistoryEntry(BaseModel):
+    """One call a human decided after it was escalated (asked), kept so the auto-mode judge
+    can recognize a similar future call instead of asking again.
+
+    ``args_summary`` is a compact, bounded rendering of the call's arguments (see
+    ``approvals.summarize_tool_args``), never the raw dict: it rides along in CarriedState and
+    in every judge prompt for the tool, so it has to stay small regardless of how large a call's
+    real arguments were. ``reason`` is the human's stated reason, if they gave one, also bounded.
+    """
+
+    tool_name: str
+    args_summary: str
+    approved: bool
+    reason: str = ""
+
+
 class CarriedState(BaseModel):
     """Everything a run hands to the next one when it continues as new.
 
@@ -78,6 +96,10 @@ class CarriedState(BaseModel):
     mcp_tools: list[dict[str, Any]] = Field(default_factory=list)
     # The remembered allow-list ("always allow") survives through AgentConfig.approval_policy,
     # which the workflow rebuilds from the live runner policy before continuing as new.
+    # Human decisions on escalated calls, for the auto-mode judge to recognize a similar call
+    # (approvals.record_decision / JudgeRequest.history). Empty for runs that predate it: the
+    # judge then sees no history, exactly as before.
+    approval_history: list[ApprovalHistoryEntry] = Field(default_factory=list)
 
 
 class CodingAgentInit(BaseModel):
@@ -283,36 +305,69 @@ class FrontDoorApproval(BaseModel):
     remember: bool = False
 
 
-# -- Subagent message models (key-free, so the API can describe subagent interfaces) --
+# -- Subagents (key-free, so the API can describe subagent interfaces) -----------------
+
+SubagentType = Literal["general", "explore", "review"]
+SubagentModel = Literal["inherit", "fast"]
+
+SUBAGENT_TYPE_HELP = (
+    "general: does a multi-step task on its own with the full workspace toolset (reads, edits, "
+    "shell); its risky calls ask the user like yours do. explore: read-only, fast; answers a "
+    "question about the code with file:line evidence. review: read-only; reviews the "
+    "uncommitted diff (else the last commit) and returns a verdict with issues."
+)
 
 
-class Question(BaseModel):
-    """A question about the codebase for the explorer to answer from the files."""
+class TaskCall(BaseModel):
+    """The ``task`` tool's input: one self-contained job for a subagent."""
 
-    question: str = Field(description="What to find out. Be specific.")
-    paths: list[str] = Field(default_factory=list, description="Where to start looking, if known.")
+    description: str = Field(
+        max_length=120, description="A short (3-6 word) label for the task, shown to the user."
+    )
+    prompt: str = Field(
+        description=(
+            "Everything the subagent needs: the goal, the files or symbols involved, constraints, "
+            "and what to report back. It sees none of your conversation."
+        )
+    )
+    subagent_type: SubagentType = Field("general", description=SUBAGENT_TYPE_HELP)
+    model: SubagentModel | None = Field(
+        None,
+        description=(
+            "inherit: your model; fast: the provider's fast model. Omit for the type's default "
+            "(explore runs fast, the others inherit)."
+        ),
+    )
+    resume: str | None = Field(
+        None,
+        description=(
+            "The subagent id of a task you started earlier in this turn, to send it this prompt "
+            "as a follow-up. It keeps its context; subagent_type and model are ignored."
+        ),
+    )
 
 
-class Evidence(BaseModel):
-    """One place in the code that supports the answer."""
+class TaskRequest(BaseModel):
+    """What the parent sends a subagent: one task to work on until done."""
+
+    description: str = ""
+    prompt: str
+
+
+class TaskFileChange(BaseModel):
+    """A file a subagent changed while it worked."""
 
     path: str
-    line: int | None = None
-    note: str
+    status: str = "modified"
+    added: int = 0
+    removed: int = 0
 
 
-class Findings(BaseModel):
-    """The explorer's answer, with the code that supports it."""
+class TaskCommit(BaseModel):
+    """A local commit a subagent made."""
 
-    answer: str
-    evidence: list[Evidence] = Field(default_factory=list)
-
-
-class ReviewRequest(BaseModel):
-    """Ask the reviewer to review the workspace's changes: the uncommitted diff, or the last
-    commit when nothing is uncommitted."""
-
-    focus: str = Field("", description="What to pay most attention to, if anything.")
+    hash: str
+    message: str = ""
 
 
 class Issue(BaseModel):
@@ -330,3 +385,32 @@ class Review(BaseModel):
     verdict: str = Field(description="approve or request_changes")
     summary: str
     issues: list[Issue] = Field(default_factory=list)
+
+    def as_text(self) -> str:
+        lines = [f"Verdict: {self.verdict}. {self.summary}"]
+        for i in self.issues:
+            where = f"{i.path}:{i.line}" if i.line else i.path
+            lines.append(f"- [{i.severity}] {where}: {i.comment}")
+        return "\n".join(lines)
+
+
+class TaskResult(BaseModel):
+    """A subagent's report on its task. ``text`` is its final message; the parent's Changes
+    panel folds in ``changed_files`` and ``commits``."""
+
+    subagent_id: str = ""
+    subagent_type: SubagentType = "general"
+    text: str
+    # Set for the review type: the structured verdict the UI draws as a card.
+    review: Review | None = None
+    changed_files: list[TaskFileChange] = Field(default_factory=list)
+    commits: list[TaskCommit] = Field(default_factory=list)
+
+    def __str__(self) -> str:
+        parts = [self.text.strip() or "(The subagent finished without a final message.)"]
+        if self.changed_files:
+            parts.append("Files it changed: " + ", ".join(f"{f.path} ({f.status})" for f in self.changed_files))
+        if self.commits:
+            parts.append("Commits it made: " + ", ".join(f"{c.hash[:10]} {c.message}" for c in self.commits))
+        parts.append(f'(subagent id: {self.subagent_id}; pass resume="{self.subagent_id}" to follow up this turn.)')
+        return "\n\n".join(parts)

@@ -31,8 +31,8 @@ describe("buildItems", () => {
   });
 
   it("hides subagent-driving tools and puts parallel subagents side by side", () => {
-    const sub = (id: string) => ({ type: "subagent" as const, subagentId: id, agentKey: "explorer", workflowId: "w", handler: "investigate", subagentTurn: 1, status: "ok" as const, messageId: null });
-    const items = buildItems({ id: "m", parts: [call(), tool("start_explorer"), tool("explorer_investigate"), sub("a"), sub("b"), tool("stop_explorer")] }, opts);
+    const sub = (id: string) => ({ type: "subagent" as const, subagentId: id, agentKey: "explore", workflowId: "w", handler: "task", subagentTurn: 1, status: "ok" as const, messageId: null });
+    const items = buildItems({ id: "m", parts: [call(), tool("task"), tool("task"), sub("a"), sub("b")] }, opts);
     expect(kinds(items)).toEqual(["subagents"]);
     expect(items[0]?.kind === "subagents" && items[0].parts.length).toBe(2);
   });

@@ -47,7 +47,6 @@ from simple_chat_agent.api.agent_routes import (
     HarnessErrorRoute,
     SessionDirectory,
     _summary,
-    agent_environment,
     closed_flags,
     not_found,
 )
@@ -90,13 +89,15 @@ _INIT_DATA = {
 }
 
 
+# Values of CONSOLE_ENABLED that turn the console off. Anything else, including leaving it
+# unset, leaves the console on, in the catalog and locally.
+_CONSOLE_OFF = {"0", "false", "no", "off", "none", "disabled"}
+
+
 def console_enabled() -> bool:
-    """``CONSOLE_ENABLED`` when set; otherwise on for ``AGENT_ENVIRONMENT=local`` and off in
-    the catalog (the default environment)."""
+    """On by default. ``CONSOLE_ENABLED`` only turns it off (``0``, ``false``, ``no``, ``off``)."""
     raw = (os.environ.get("CONSOLE_ENABLED") or "").strip().lower()
-    if raw:
-        return raw in {"1", "true", "yes", "on"}
-    return agent_environment() == "local"
+    return raw not in _CONSOLE_OFF
 
 
 def console_dist() -> Path | None:
@@ -230,7 +231,7 @@ def mount_console(app: FastAPI, agent_api: AgentApi, *, app_store: Callable[[], 
         return False
     dist = console_dist()
     if dist is None:
-        log.warning("CONSOLE_ENABLED but the harness console assets aren't installed; /console is off")
+        log.warning("the harness console is on but its assets aren't installed; /console is off")
         return False
     console_api = create_console_router(
         agent_router=agent_api.router(app_store=app_store),

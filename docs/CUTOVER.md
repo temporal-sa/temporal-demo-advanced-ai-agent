@@ -1,6 +1,6 @@
 # Cutover runbook
 
-This runbook moves the catalog from the old chat app (`SimpleChatWorkflow`, `UserChatsWorkflow`) to the coding agent (`CodingSessions`, `CodingAgent`, `Explorer`, `Reviewer`). It follows PRD §6 and decision D4: no history is migrated, old chats are terminated, and users start new sessions.
+This runbook moves the catalog from the old chat app (`SimpleChatWorkflow`, `UserChatsWorkflow`) to the coding agent (`CodingSessions`, `CodingAgent`, `TaskAgent`). It follows PRD §6 and decision D4: no history is migrated, old chats are terminated, and users start new sessions.
 
 **This needs the owner's `/go release`.** Nothing here runs against the catalog before that go. The dry run at the end was done on the local dev server only.
 
@@ -8,7 +8,7 @@ This runbook moves the catalog from the old chat app (`SimpleChatWorkflow`, `Use
 
 | | Old app | Coding agent |
 |---|---|---|
-| Workflow types | `SimpleChatWorkflow`, `UserChatsWorkflow` | `CodingSessions`, `CodingAgent`, `Explorer`, `Reviewer` |
+| Workflow types | `SimpleChatWorkflow`, `UserChatsWorkflow` | `CodingSessions`, `CodingAgent`, `TaskAgent` |
 | Task Queue | `SIMPLE_CHAT_TASK_QUEUE` | `CODING_AGENT_TASK_QUEUE`, mapped in the catalog to `$(SIMPLE_CHAT_TASK_QUEUE)`, so the same queue |
 | Worker Deployment | `advanced-ai-agent` | the same Deployment, a new version (new Build ID) |
 | Build ID | `TEMPORAL_WORKER_BUILD_ID` | `TEMPORAL_WORKER_BUILD_ID`, now **required** (`CODING_AGENT_BUILD_ID` is still read as an alias; the old `1.0.0` default is gone) |

@@ -41,7 +41,7 @@ export const accepted = (t: TurnRef, handler: string, payload: Record<string, un
 
 /** message_accepted, message_handler_start, turn_started. */
 export function openTurn(t: TurnRef, text: string, handler = "chat"): Frame[] {
-  return [accepted(t, handler, handler === "chat" ? { text } : { question: text }), ev(t, "message_handler_start"), ev(t, "turn_started")];
+  return [accepted(t, handler, handler === "chat" ? { text } : { description: text, prompt: text }), ev(t, "message_handler_start"), ev(t, "turn_started")];
 }
 
 export function closeTurn(t: TurnRef, output: Record<string, unknown>): Frame[] {
@@ -155,18 +155,18 @@ export interface Sub {
   workflowId: string;
 }
 
-/** The parent's frames that start a subagent turn (the hidden driving tool plus the subagent row). */
+/** The parent's frames that start a subagent turn (the hidden `task` tool plus the subagent row). */
 export function subagentAsked(parent: TurnRef, sub: Sub, toolId: string, question: string): Frame[] {
-  const input = { question };
+  const input = { description: question, prompt: question, subagent_type: sub.agentKey };
   return [
-    toolRequested(parent, toolId, "explorer_investigate", input),
-    toolStart(parent, toolId, "explorer_investigate", input),
+    toolRequested(parent, toolId, "task", input),
+    toolStart(parent, toolId, "task", input),
     ev(parent, "subagent_started", { subagent_id: sub.agentId, agent_key: sub.agentKey, workflow_id: sub.workflowId }),
     ev(parent, "subagent_message_sent", {
       subagent_id: sub.agentId,
       agent_key: sub.agentKey,
       workflow_id: sub.workflowId,
-      handler: "investigate",
+      handler: "task",
       subagent_turn: 1,
       from_offset: 0,
     }),
@@ -179,11 +179,11 @@ export function subagentReplied(parent: TurnRef, sub: Sub, toolId: string, answe
       subagent_id: sub.agentId,
       agent_key: sub.agentKey,
       workflow_id: sub.workflowId,
-      handler: "investigate",
+      handler: "task",
       subagent_turn: 1,
       outcome: "ok",
     }),
-    toolEnd(parent, toolId, "explorer_investigate", answer),
+    toolEnd(parent, toolId, "task", answer),
   ];
 }
 

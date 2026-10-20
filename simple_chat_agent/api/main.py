@@ -266,8 +266,8 @@ def _app_sign_in(request: Request) -> HTMLResponse:
 
 
 # The harness console (P2 step 2.4): its unchanged static UI at /console/, talking to our own
-# owner-scoped routes at /console/api/. CONSOLE_ENABLED; on by default only for
-# AGENT_ENVIRONMENT=local. Mounted last so its static mount can't shadow other routes.
+# owner-scoped routes at /console/api/. On unless CONSOLE_ENABLED turns it off. Mounted last
+# so its static mount can't shadow other routes.
 app.state.console_enabled = mount_console(app, _agent_api, app_store=_store)
 
 

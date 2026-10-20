@@ -1,22 +1,23 @@
-// A subagent as a nested row (PRD U2): its question, its own tool calls, and its typed answer.
-// Explorers return Findings; the Reviewer returns a Review, drawn as a card with a verdict and
+// A subagent as a nested row (PRD U2): its task, its own tool calls, and its report (a
+// TaskResult). A reviewer's report also carries a Review, drawn as a card with a verdict and
 // issues (severity, file:line). Shapes: simple_chat_agent/agent/contracts.py.
 
 import { useState } from "react";
 import type { Message, SubagentPart, ToolPart } from "../session";
+import { agentLabel } from "../workbench/tree";
 import { useTranscript } from "./context";
-import { argPreview } from "./toolInfo";
+import { argPreview, oneLine } from "./toolInfo";
 import { Markdown } from "./Markdown";
 import { ErrorNote } from "./ErrorNote";
 
-interface Evidence {
+interface TaskFileChange {
   path: string;
-  line?: number | null;
-  note: string;
+  status: string;
 }
-interface Findings {
-  answer: string;
-  evidence?: Evidence[];
+interface TaskResult {
+  text: string;
+  review?: Review | null;
+  changed_files?: TaskFileChange[];
 }
 interface Issue {
   severity: string;
@@ -31,18 +32,14 @@ interface Review {
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
-export const asFindings = (v: unknown): Findings | null => (isObj(v) && typeof v.answer === "string" ? (v as unknown as Findings) : null);
+export const asTaskResult = (v: unknown): TaskResult | null => (isObj(v) && typeof v.text === "string" ? (v as unknown as TaskResult) : null);
 export const asReview = (v: unknown): Review | null =>
   isObj(v) && typeof v.verdict === "string" && typeof v.summary === "string" ? (v as unknown as Review) : null;
 
-function label(agentKey: string): string {
-  return agentKey ? agentKey[0]!.toUpperCase() + agentKey.slice(1) : "Subagent";
-}
-
-function question(part: SubagentPart, message: Message | undefined): string {
+function title(part: SubagentPart, message: Message | undefined): string {
   const input = (message?.input ?? {}) as Record<string, unknown>;
-  if (typeof input.question === "string") return input.question;
-  if (part.handler === "review") return typeof input.focus === "string" && input.focus ? `Review the diff: ${input.focus}` : "Review the current diff";
+  if (typeof input.description === "string" && input.description) return input.description;
+  if (typeof input.prompt === "string" && input.prompt) return oneLine(input.prompt, 120);
   return part.handler;
 }
 
@@ -85,8 +82,9 @@ export function SubagentCard({ part }: { part: SubagentPart }) {
   const node = session.agent(part.subagentId);
   const message = part.messageId ? node?.messages.find((m) => m.id === part.messageId) : undefined;
   const tools = (message?.parts ?? []).filter((p): p is ToolPart => p.type === "tool");
-  const findings = asFindings(message?.output);
-  const review = asReview(message?.output);
+  const result = asTaskResult(message?.output);
+  const review = asReview(result?.review);
+  const changed = result?.changed_files ?? [];
   const status =
     part.status === "running" ? (
       <span className="badge prog">Running</span>
@@ -101,8 +99,8 @@ export function SubagentCard({ part }: { part: SubagentPart }) {
     <div className="subagent-wrap">
       <div className="subagent">
         <button type="button" className="head" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-          <span className="badge agent">{label(part.agentKey)}</span>
-          <span className="q">{question(part, message)}</span>
+          <span className="badge agent">{agentLabel(part.agentKey || null)}</span>
+          <span className="q">{title(part, message)}</span>
           {status}
         </button>
         {tools.length > 0 && (
@@ -115,15 +113,14 @@ export function SubagentCard({ part }: { part: SubagentPart }) {
             {!open && tools.length > 3 && <span>… {tools.length - 3} earlier calls</span>}
           </div>
         )}
-        {findings && (
+        {result && !review && (
           <div className="find">
-            <b>Findings</b> <Markdown text={findings.answer} />
-            {open &&
-              findings.evidence?.map((e, n) => (
-                <div key={n} className="evidence">
-                  <span className="where">{where(e.path, e.line)}</span> {e.note}
-                </div>
-              ))}
+            <b>{part.agentKey === "explore" ? "Findings" : "Report"}</b> <Markdown text={result.text} />
+            {changed.length > 0 && (
+              <div className="evidence">
+                Changed {changed.map((f) => f.path).join(", ")}
+              </div>
+            )}
           </div>
         )}
         {message?.error && <ErrorNote text="The subagent stopped with an error. The main agent carries on without its answer." detail={message.error} />}

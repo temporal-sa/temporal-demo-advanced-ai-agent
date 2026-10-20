@@ -31,8 +31,8 @@ export const PYTEST = "pytest -q";
 export const PYTEST_LOG = "log-pytest-1";
 
 export const EXPLORERS: Sub[] = [
-  { agentId: "agent-explorer-1", agentKey: "explorer", workflowId: "sess-explorer-1" },
-  { agentId: "agent-explorer-2", agentKey: "explorer", workflowId: "sess-explorer-2" },
+  { agentId: "agent-explorer-1", agentKey: "explore", workflowId: "sess-explorer-1" },
+  { agentId: "agent-explorer-2", agentKey: "explore", workflowId: "sess-explorer-2" },
 ];
 
 const PLAN = {
@@ -57,10 +57,10 @@ export const EXPLORER_USAGE = { input: 3100, output: 240, cacheRead: 2000, cache
 function explorerTurn(sub: Sub, question: string, file: string, answer: string): Frame[] {
   const t = turn(1, `${sub.agentId}-msg-1`, sub.agentId);
   return [
-    ...openTurn(t, question, "investigate"),
+    ...openTurn(t, question, "task"),
     ...modelCall(t, 0, EXPLORER_USAGE, { model: "claude-haiku-5-5" }),
     ...quickTool(t, `${sub.agentId}-read`, "read_file", { path: file }, `1  def refund(amount):\n2      return round(amount * 0.9)\n`),
-    ...closeTurn(t, { answer, evidence: [{ path: file, line: 2, note: "round() drops cents" }] }),
+    ...closeTurn(t, { subagent_id: sub.agentId, subagent_type: "explore", text: `${answer} (${file}:2: round() drops cents)`, changed_files: [], commits: [] }),
   ];
 }
 

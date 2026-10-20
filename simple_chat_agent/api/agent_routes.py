@@ -76,20 +76,17 @@ from simple_chat_agent.agent.contracts import (
     PICK_MAX_FILES,
     PICK_MAX_NAME_CHARS,
     PICK_UPLOAD_DIR,
+    TASK_AGENT_WORKFLOW_TYPE,
     Ack,
     AlwaysAllowedForgotten,
     ChatMessage,
     ChatReply,
     CodingAgentInit,
-    Findings,
     ForgetAlwaysAllowed,
     FrontDoorApproval,
     FrontDoorCallbackResult,
     FrontDoorMessage,
     InterruptRequest,
-    Question,
-    Review,
-    ReviewRequest,
     ModelChoice,
     Posture,
     SetModel,
@@ -97,6 +94,8 @@ from simple_chat_agent.agent.contracts import (
     SettingsAck,
     SetWebSearch,
     SteerMessage,
+    TaskRequest,
+    TaskResult,
 )
 # Key-free: the executor log reader is a plain HTTP helper (no tools runtime, no LLM keys).
 from simple_chat_agent.agent.tools.workspace import ExecutionLogNotFound, ExecutorRequestError, read_execution_log
@@ -275,7 +274,7 @@ def console_link_status() -> tuple[bool, str | None]:
     from simple_chat_agent.api import console
 
     if not console.console_enabled():
-        return False, "The harness console is off in this environment."
+        return False, "The harness console is switched off."
     try:
         installed = console.console_dist() is not None
     except Exception:  # noqa: BLE001 - a missing optional UI must not break config
@@ -632,26 +631,16 @@ _CODING_AGENT_HANDLERS: tuple[tuple[str, type[BaseModel], type[BaseModel], str, 
 )
 
 
-# The read-only subagents (simple_chat_agent.agent.subagents), whose models also live in
-# contracts.py. Bare ``@agent.accepts``: the decorator's defaults (reject mid-turn, callable
-# by a parent's model).
+# The subagent the ``task`` tool starts (simple_chat_agent.agent.subagents), whose models also
+# live in contracts.py. Bare ``@agent.accepts``: the decorator's defaults (reject mid-turn,
+# callable by a parent's model).
 _SUBAGENT_HANDLERS: dict[str, tuple[tuple[str, type[BaseModel], type[BaseModel], str, MidTurn, bool], ...]] = {
-    "ExplorerAgent": (
+    TASK_AGENT_WORKFLOW_TYPE: (
         (
-            "investigate",
-            Question,
-            Findings,
-            "Investigate one question about the workspace's code (read-only) and report findings with file and line evidence.",
-            MidTurn.REJECT,
-            True,
-        ),
-    ),
-    "ReviewerAgent": (
-        (
-            "review",
-            ReviewRequest,
-            Review,
-            "Review the workspace's changes (the uncommitted diff, else the last commit) and return a verdict with concrete issues.",
+            "task",
+            TaskRequest,
+            TaskResult,
+            "Work on one task in the workspace until it is done, then report what was done.",
             MidTurn.REJECT,
             True,
         ),

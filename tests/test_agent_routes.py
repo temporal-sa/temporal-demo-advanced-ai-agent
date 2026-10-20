@@ -363,7 +363,7 @@ class OwnershipTests(AgentRoutesTestBase):
     def test_subagent_id_resolves_to_root_owner(self) -> None:
         root = self.create()["workflow_id"]
         sub = f"{root}-explorer-1"
-        self.temporal.workflows[sub] = FakeWorkflow("ExplorerAgent", parent_id=root)
+        self.temporal.workflows[sub] = FakeWorkflow("TaskAgent", parent_id=root)
         r = self.client.get(f"/api/agent/status/{sub}", headers=A)
         self.assertEqual(r.status_code, 200, r.text)
         r = self.client.get("/api/agent/attach", params={"session_id": sub}, headers=A)
@@ -375,7 +375,7 @@ class OwnershipTests(AgentRoutesTestBase):
     def test_status_carries_the_current_run_id_without_a_query(self) -> None:
         root = self.create()["workflow_id"]
         sub = f"{root}-explorer-1"
-        self.temporal.workflows[sub] = FakeWorkflow("ExplorerAgent", parent_id=root, run_id="sub-run-1")
+        self.temporal.workflows[sub] = FakeWorkflow("TaskAgent", parent_id=root, run_id="sub-run-1")
         # Recorded at create from the start call's run id.
         self.assertEqual(self.client.get(f"/api/agent/status/{root}", headers=A).json()["run_id"], "root-run-0")
         # A subagent's is null until the bridge records it (Describe on subagent_started).
@@ -390,7 +390,7 @@ class OwnershipTests(AgentRoutesTestBase):
     def test_subagent_id_whole_session_routes_take_root_only(self) -> None:
         root = self.create()["workflow_id"]
         sub = f"{root}-reviewer-1"
-        self.temporal.workflows[sub] = FakeWorkflow("ReviewerAgent", parent_id=root)
+        self.temporal.workflows[sub] = FakeWorkflow("TaskAgent", parent_id=root)
         for method, path, body in (
             ("POST", f"/sessions/{sub}/title", {"title": "x"}),
             ("DELETE", f"/sessions/{sub}", None),
@@ -417,7 +417,7 @@ class OwnershipTests(AgentRoutesTestBase):
         other = f"other-{uuid.uuid4().hex[:8]}"
         self.temporal.workflows[other] = FakeWorkflow("SomethingElse", owner=owner_digest("alice"))
         orphan_sub = f"sub-{uuid.uuid4().hex[:8]}"
-        self.temporal.workflows[orphan_sub] = FakeWorkflow("ExplorerAgent", parent_id=other)
+        self.temporal.workflows[orphan_sub] = FakeWorkflow("TaskAgent", parent_id=other)
         for wid in (untagged, other, orphan_sub):
             self.assertEqual(self.client.get(f"/api/agent/status/{wid}", headers=A).status_code, 404, wid)
 
@@ -425,7 +425,7 @@ class OwnershipTests(AgentRoutesTestBase):
         root = f"coding-agent-{uuid.uuid4().hex[:16]}"
         self.temporal.workflows[root] = FakeWorkflow(AGENT_WORKFLOW_TYPE, owner=owner_digest("alice"))
         sub = f"{root}-explorer-2"
-        self.temporal.workflows[sub] = FakeWorkflow("ExplorerAgent", parent_id=root)
+        self.temporal.workflows[sub] = FakeWorkflow("TaskAgent", parent_id=root)
         self.assertEqual(self.client.get(f"/api/agent/status/{sub}", headers=B).status_code, 404)
         self.assertEqual(self.client.get(f"/api/agent/status/{sub}", headers=A).status_code, 200)
 
@@ -468,7 +468,6 @@ class ErrorBodyTests(AgentRoutesTestBase):
     def test_create_errors(self) -> None:
         cases = [
             ({"model": {"provider": "anthropic", "model": "claude-2"}}, 422, "model_not_allowed"),
-            ({"posture": "never_ask"}, 422, "posture_not_allowed"),
             ({"posture": "yolo"}, 422, "invalid_request"),
             ({"demo": "nope"}, 422, "invalid_request"),
             ({"bogus": 1}, 422, "invalid_request"),
@@ -518,6 +517,9 @@ class SessionTests(AgentRoutesTestBase):
         self.assertEqual(init.model.registry_key, "anthropic:claude-sonnet-5-5")
         self.assertEqual(init.posture, "trust_safe")
         self.assertEqual(s["label"], "New session")
+        self.create(posture="never_ask")
+        init = self.temporal.starts[-1]["args"][1]
+        self.assertEqual((init.posture, init.environment), ("never_ask", "catalog"))
         with mock.patch.dict(os.environ, {"AGENT_ENVIRONMENT": "local", "AGENT_RESEARCH_TOOLS": "fetch_url,search_web"}):
             self.create(posture="never_ask")
         init = self.temporal.starts[-1]["args"][1]
@@ -782,9 +784,10 @@ class DirectorySyncTests(AgentRoutesTestBase):
         r = self.send(sid, "set_model", {"model": {"provider": "openai", "model": "gpt-nope"}})
         self.assertEqual(r.status_code, 422)
         self.assertEqual(r.json()["error"], "model_not_allowed")
-        r = self.send(sid, "set_posture", {"posture": "never_ask"})
+        with mock.patch.dict(os.environ, {"AGENT_JUDGE_MODEL": "not-a-spec"}):
+            r = self.send(sid, "set_posture", {"posture": "auto"})
         self.assertEqual(r.status_code, 422)
-        self.assertEqual(len(self.temporal.signals), signals)  # nothing reached Temporal
+        self.assertEqual(len(self.temporal.signals), signals)  # a refused posture never reaches Temporal
         # Malformed payloads go to the workflow (it validates them) but never touch the list.
         self.assertEqual(self.send(sid, "set_model", {"model": "not-an-object"}).status_code, 200)
         self.assertEqual(self.send(sid, "set_posture", {}).status_code, 200)
@@ -969,7 +972,7 @@ class ConfigTests(AgentRoutesTestBase):
         self.assertEqual(c["environment"], "catalog")
         self.assertEqual([p["provider"] for p in c["providers"]], ["anthropic", "openai", "google"])
         self.assertEqual(c["default_model"], {"provider": "anthropic", "model": "claude-sonnet-5-5"})
-        self.assertNotIn("never_ask", [p["id"] for p in c["postures"]])
+        self.assertIn("never_ask", [p["id"] for p in c["postures"]])
         self.assertEqual(c["effort_options"], ["low", "medium", "high"])
         sonnet = next(m for m in c["models"] if m["id"] == "claude-sonnet-5-5")
         self.assertEqual((sonnet["max_input_tokens"], sonnet["max_output_tokens"]), (1_000_000, 128_000))
@@ -1018,7 +1021,7 @@ class UploadAndLogTests(AgentRoutesTestBase):
     def test_upload_from_subagent_id_lands_on_root(self) -> None:
         root = self.create()["workflow_id"]
         sub = f"{root}-explorer-9"
-        self.temporal.workflows[sub] = FakeWorkflow("ExplorerAgent", parent_id=root)
+        self.temporal.workflows[sub] = FakeWorkflow("TaskAgent", parent_id=root)
         r = self.client.post(f"/api/agent/sessions/{sub}/attachments", files={"file": ("a.txt", b"x", "text/plain")}, headers=A)
         self.assertEqual(r.status_code, 200, r.text)
         record = self.app_store.get_artifact(user_id="alice", artifact_id=r.json()["attachment"]["attachment_id"])
@@ -1034,7 +1037,7 @@ class UploadAndLogTests(AgentRoutesTestBase):
         self.assertEqual((r.status_code, r.json()["error"]), (404, "output_expired"))
         # Subagent ids read their root's workspace.
         sub = f"{sid}-explorer-1"
-        self.temporal.workflows[sub] = FakeWorkflow("ExplorerAgent", parent_id=sid)
+        self.temporal.workflows[sub] = FakeWorkflow("TaskAgent", parent_id=sid)
         self.assertEqual(self.client.get(f"/api/agent/sessions/{sub}/logs/exec-1", headers=A).json()["text"], "full output")
 
 
@@ -1051,17 +1054,13 @@ class AgentInterfaceTests(AgentRoutesTestBase):
 
     def test_subagent_interfaces_by_workflow_type(self) -> None:
         root = self.create()["workflow_id"]
-        for kind, workflow_type, name, field in (
-            ("explorer", "ExplorerAgent", "investigate", "question"),
-            ("reviewer", "ReviewerAgent", "review", "focus"),
-        ):
-            sub = f"{root}-{kind}-1"
-            self.temporal.workflows[sub] = FakeWorkflow(workflow_type, parent_id=root)
-            r = self.client.get(f"/api/agent/agent-interface/{sub}", headers=A)
-            self.assertEqual(r.status_code, 200, r.text)
-            self.assertEqual([f["name"] for f in r.json()], [name])
-            self.assertIn(field, r.json()[0]["parameters"]["properties"])
-            self.assertEqual(self.client.get(f"/api/agent/agent-interface/{sub}", headers=B).status_code, 404)
+        sub = f"{root}-general-1"
+        self.temporal.workflows[sub] = FakeWorkflow("TaskAgent", parent_id=root)
+        r = self.client.get(f"/api/agent/agent-interface/{sub}", headers=A)
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual([f["name"] for f in r.json()], ["task"])
+        self.assertIn("prompt", r.json()[0]["parameters"]["properties"])
+        self.assertEqual(self.client.get(f"/api/agent/agent-interface/{sub}", headers=B).status_code, 404)
         sub = f"{root}-other-1"
         self.temporal.workflows[sub] = FakeWorkflow("SomeOtherAgent", parent_id=root)
         r = self.client.get(f"/api/agent/agent-interface/{sub}", headers=A)
@@ -1076,14 +1075,10 @@ class StaticTablesTests(unittest.TestCase):
         os.environ.setdefault("OPENAI_API_KEY", "test-key-not-used")
         from temporal_agent_harness.harness.agent_workflow import agent_handlers
 
-        from simple_chat_agent.agent.subagents import ExplorerAgent, ReviewerAgent
+        from simple_chat_agent.agent.subagents import TaskAgent
         from simple_chat_agent.agent.workflow import CodingAgent
 
-        for workflow_type, cls in (
-            ("CodingAgent", CodingAgent),
-            ("ExplorerAgent", ExplorerAgent),
-            ("ReviewerAgent", ReviewerAgent),
-        ):
+        for workflow_type, cls in (("CodingAgent", CodingAgent), ("TaskAgent", TaskAgent)):
             expected = [
                 {
                     "name": h.name,
@@ -1097,7 +1092,7 @@ class StaticTablesTests(unittest.TestCase):
             ]
             with self.subTest(workflow_type=workflow_type):
                 self.assertEqual(list(agent_routes.agent_interface_for(workflow_type)), expected)
-        self.assertEqual(set(agent_routes.AGENT_HANDLERS), {"CodingAgent", "ExplorerAgent", "ReviewerAgent"})
+        self.assertEqual(set(agent_routes.AGENT_HANDLERS), {"CodingAgent", "TaskAgent"})
 
     def test_allowlist_mirrors_model_registry(self) -> None:
         from simple_chat_agent.agent import model_registry
@@ -1264,7 +1259,7 @@ class ReviewFixTests(_RouteHelpers, AgentRoutesTestBase):
     def test_minor1_subagent_id_found_by_scan_is_registered(self) -> None:
         root = self.create()["workflow_id"]
         child = f"{root}-reviewer-1"
-        self.temporal.workflows[child] = FakeWorkflow("ReviewerAgent", parent_id=root)
+        self.temporal.workflows[child] = FakeWorkflow("TaskAgent", parent_id=root)
         self.append(root, "subagent_started", {"agent_id": "aaaaaa", "subagent_id": "aaaaaa-eeeeee", "workflow_id": child}, 0, 0)
         self.client.get("/api/agent/attach", params={"session_id": child}, headers=A)
         self.assertEqual(self.run_async(self.store.agent_id_of(child)), "aaaaaa-eeeeee")
@@ -1345,7 +1340,7 @@ class ReviewFixTests(_RouteHelpers, AgentRoutesTestBase):
     def test_minor1_subagent_attach_serves_the_root_stream_filtered(self) -> None:
         root = self.create()["workflow_id"]
         child = f"{root}-explorer-1"
-        self.temporal.workflows[child] = FakeWorkflow("ExplorerAgent", parent_id=root)
+        self.temporal.workflows[child] = FakeWorkflow("TaskAgent", parent_id=root)
         self.append(root, "turn_started", {"agent_id": "aaaaaa"}, 0, 0)
         self.append(root, "subagent_started", {"agent_id": "aaaaaa", "subagent_id": "aaaaaa-bbbbbb", "workflow_id": child}, 1, 0)
         self.append(root, "turn_started", {"agent_id": "aaaaaa-bbbbbb", "n": 1}, 1, 1)
@@ -1364,7 +1359,7 @@ class ReviewFixTests(_RouteHelpers, AgentRoutesTestBase):
     def test_minor2_messages_to_a_subagent_are_refused(self) -> None:
         root = self.create()["workflow_id"]
         child = f"{root}-explorer-1"
-        self.temporal.workflows[child] = FakeWorkflow("ExplorerAgent", parent_id=root)
+        self.temporal.workflows[child] = FakeWorkflow("TaskAgent", parent_id=root)
         r = self.client.post(
             "/api/agent/messages", json={"session_id": child, "message": {"type": "investigate", "payload": {}}}, headers=A
         )
@@ -1378,7 +1373,7 @@ class ReviewFixTests(_RouteHelpers, AgentRoutesTestBase):
 
         root = self.create()["workflow_id"]
         child = f"{root}-explorer-1"
-        self.temporal.workflows[child] = FakeWorkflow("ExplorerAgent", parent_id=root)
+        self.temporal.workflows[child] = FakeWorkflow("TaskAgent", parent_id=root)
         body = {"session_id": child, "tool_id": "t1", "approved": True, "reason": "ok"}
         r = self.client.post("/api/agent/approve", json=body, headers=A)
         self.assertEqual(r.status_code, 200, r.text)
@@ -1679,7 +1674,7 @@ class VerificationFollowUpTests(_RouteHelpers, AgentRoutesTestBase):
     def test_n6_subagent_approval_update_id_is_stable(self) -> None:
         root = self.create()["workflow_id"]
         child = f"{root}-explorer-1"
-        self.temporal.workflows[child] = FakeWorkflow("ExplorerAgent", parent_id=root)
+        self.temporal.workflows[child] = FakeWorkflow("TaskAgent", parent_id=root)
         body = {"session_id": child, "tool_id": "t9", "approved": True}
         self.client.post("/api/agent/approve", json=body, headers=A)
         self.client.post("/api/agent/approve", json=body, headers=A)
@@ -1748,8 +1743,8 @@ class ProductViewConfigTests(AgentRoutesTestBase):
         c = self.config()
         options = {o["id"]: o for o in c["posture_options"]}
         self.assertEqual(list(options), ["ask_everything", "trust_safe", "auto", "never_ask"])
-        self.assertFalse(options["never_ask"]["available"])
-        self.assertEqual(options["never_ask"]["reason"], "Local development only.")
+        self.assertTrue(options["never_ask"]["available"])
+        self.assertIsNone(options["never_ask"]["reason"])
         self.assertTrue(options["auto"]["available"])
         self.assertTrue(options["trust_safe"]["default"])
         self.assertEqual(sum(o["default"] for o in options.values()), 1)
@@ -1838,12 +1833,6 @@ class ProductViewConfigTests(AgentRoutesTestBase):
         )
 
     def test_create_refuses_postures_the_menu_greys_out(self) -> None:
-        # never_ask outside local: 422 with the menu's reason.
-        menu = {o["id"]: o for o in self.config()["posture_options"]}
-        r = self.client.post("/api/agent/sessions", json={"posture": "never_ask"}, headers=A)
-        self.assertEqual(r.status_code, 422)
-        self.assertEqual(r.json()["error"], "posture_not_allowed")
-        self.assertIn(menu["never_ask"]["reason"], r.text)
         # auto while the judge is unavailable: 422 with the menu's reason; nothing started.
         with mock.patch.dict(os.environ, {"AGENT_JUDGE_MODEL": "not-a-spec"}):
             menu = {o["id"]: o for o in self.client.get("/api/agent/config", headers=A).json()["posture_options"]}
@@ -1853,18 +1842,13 @@ class ProductViewConfigTests(AgentRoutesTestBase):
             self.assertEqual(r.json()["error"], "posture_not_allowed")
             self.assertIn(menu["auto"]["reason"], r.text)
             self.assertEqual(len(self.temporal.events), starts)
-        # Available again: both create fine where allowed.
+        # Available again: both create fine, never_ask in the catalog too.
         self.create(posture="auto")
-        with mock.patch.dict(os.environ, {"AGENT_ENVIRONMENT": "local"}):
-            self.create(posture="never_ask")
+        self.create(posture="never_ask")
 
     def test_set_posture_message_refuses_the_same(self) -> None:
         sid = self.create()["workflow_id"]
         sent = len(self.temporal.signals)
-        r = self.set_posture(sid, "never_ask")
-        self.assertEqual(r.status_code, 422, r.text)
-        self.assertEqual(r.json()["error"], "posture_not_allowed")
-        self.assertIn("Local development only.", r.text)
         with mock.patch.dict(os.environ, {"AGENT_JUDGE_MODEL": "not-a-spec"}):
             r = self.set_posture(sid, "auto")
             self.assertEqual(r.status_code, 422, r.text)
@@ -1874,8 +1858,7 @@ class ProductViewConfigTests(AgentRoutesTestBase):
         self.assertEqual(self.set_posture(sid, "auto").status_code, 200)
         _wid, name, arg = self.temporal.signals[-1]
         self.assertEqual((name, arg.type, arg.payload), ("enqueue_message", "set_posture", {"posture": "auto"}))
-        with mock.patch.dict(os.environ, {"AGENT_ENVIRONMENT": "local"}):
-            self.assertEqual(self.set_posture(sid, "never_ask").status_code, 200)
+        self.assertEqual(self.set_posture(sid, "never_ask").status_code, 200)
         # Ownership is checked first: a foreign session is a 404, not a posture error.
         self.assertEqual(self.set_posture(sid, "never_ask", headers=B).status_code, 404)
 
@@ -1898,7 +1881,7 @@ class ProductViewConfigTests(AgentRoutesTestBase):
         self.assertEqual(classes["run_command"], "shell")
         self.assertEqual(classes["git_commit"], "shell")
         self.assertEqual(classes["fetch_url"], "network")
-        self.assertEqual(classes["explorer_investigate"], "read_only")
+        self.assertEqual(classes["task"], "read_only")
 
     def test_tool_risk_classes_follow_the_rulebook(self) -> None:
         # No copy in the API: a change to the agent's table shows up in config as is.

@@ -220,6 +220,14 @@
           },
           "title": "Pending Messages",
           "type": "array"
+        },
+        "mcp_tools": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Mcp Tools",
+          "type": "array"
         }
       },
       "title": "CarriedState",

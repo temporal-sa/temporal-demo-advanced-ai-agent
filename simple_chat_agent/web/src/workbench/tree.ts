@@ -8,7 +8,7 @@ import type { AgentNode, CodingSession, Message, ToolPart } from "../session";
 export interface LocatedTool {
   part: ToolPart;
   agentId: string;
-  /** null for the root agent; "explorer", "reviewer", ... for a subagent. */
+  /** null for the root agent; the subagent type ("general", "explore", "review") for a subagent. */
   agentKey: string | null;
   messageId: string;
   /** The message's handler status: an open message is "accepted" or "running". */
@@ -51,9 +51,13 @@ export function toolsOf(session: SessionTree): LocatedTool[] {
   return out;
 }
 
+/** Labels for the `task` tool's subagent types (contracts.py `SubagentType`). */
+const SUBAGENT_LABELS: Readonly<Record<string, string>> = { general: "Subagent", explore: "Explorer", review: "Reviewer" };
+
 /** "main agent", or the subagent's kind ("Explorer"). */
 export function agentLabel(agentKey: string | null): string {
   if (!agentKey) return "main agent";
+  if (SUBAGENT_LABELS[agentKey]) return SUBAGENT_LABELS[agentKey];
   const words = agentKey.replace(/[_-]+/g, " ").trim();
   return words ? words[0]!.toUpperCase() + words.slice(1) : "a subagent";
 }

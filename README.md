@@ -7,7 +7,7 @@ What's in it:
 - **[`temporal-agent-harness`](https://pypi.org/project/temporal-agent-harness/) 0.7.0** for the agent loop: turns, tools, approvals, events, subagents, Code Mode and browser callbacks. The few gaps it has (interrupt, continue-as-new, heartbeats) are filled in one module, [`agent/harness_ext.py`](simple_chat_agent/agent/harness_ext.py).
 - **[Pydantic AI's Temporal integration](https://ai.pydantic.dev/durable_execution/temporal/)** with Anthropic, OpenAI and Gemini. You can switch provider between turns and keep the history.
 - **A sandboxed workspace.** The agent reads, searches and edits code, runs commands and tests, and commits locally, inside a Bubblewrap sandbox with no credentials.
-- **Approvals** with four postures, including an auto mode where a judge approves routine calls and sends the rest to you. The gate fails closed.
+- **Approvals** with four postures, including an auto mode where a judge approves routine calls and sends the rest to you. The judge sees this session's past approve/decline decisions on each tool, so it doesn't keep escalating the same shape of call. The gate fails closed.
 - **Durability you can see.** A worker crash shows what Temporal kept and what it repeated. Messages and approvals sent while no worker is running land in Temporal as [Signals](https://docs.temporal.io/sending-messages#sending-signals) and apply when a worker returns.
 - **[Worker Versioning](https://docs.temporal.io/production-deployment/worker-deployments/worker-versioning)** with PINNED workflows, and [continue-as-new](https://docs.temporal.io/workflow-execution/continue-as-new) for long sessions.
 - A product view in the buildkit design language, the harness console one click away, and Temporal UI links on every session.
@@ -30,7 +30,7 @@ flowchart LR
 
 | Component | What it does | When it's down |
 |---|---|---|
-| Worker (`CodingSessions`, `CodingAgent`, `Explorer`, `Reviewer`) | Runs each session as a workflow. Model calls and workspace tools are activities. | The UI keeps working from Redis. New messages and approvals wait in Temporal. A banner says the worker isn't answering. |
+| Worker (`CodingSessions`, `CodingAgent`, `TaskAgent`) | Runs each session as a workflow. Model calls and workspace tools are activities. | The UI keeps working from Redis. New messages and approvals wait in Temporal. A banner says the worker isn't answering. |
 | API | Auth, the harness transport routes, the Signal front door, the bridge that copies agent events into Redis, uploads and the console | The UI is unavailable; workflows carry on. |
 | Redis (AOF) | The session's event log, status, leases and spend counters | Attach falls back to Temporal. New turns stop (spend checks fail closed). |
 | Executor | Runs commands and file operations in a per-session workspace | Tools retry; the Terminal says the sandbox isn't answering. |
@@ -85,11 +85,11 @@ One session, from **New demo session**. The seed is a small Python service with 
 | Time | Do | What you'll see |
 |---|---|---|
 | 0:00 | Open the product view. Posture **Auto mode**, model Claude. | |
-| 0:40 | Send: "test_refund fails. Find the cause, fix it, run the tests, commit." | The plan fills in. Two explorers run in parallel, nested in the transcript. |
+| 0:40 | Send: "test_refund fails. Find the cause, fix it, run the tests, commit." | The plan fills in. Two explore subagents (two `task` calls) run in parallel, nested in the transcript. |
 | 1:50 | | The fix appears as an inline diff. The judge approves `pytest`, and the Terminal streams. |
 | 2:40 | `make crash-worker` during the test run, then `make dev-worker`. | A yellow banner. In Temporal UI, the pending activity. Then a recovery divider ("Worker lost at …. Kept: … Repeated: …") and the tests go green. |
 | 4:10 | | `git_commit` goes to you, not the judge. Reload the page: the card is still there. Approve. |
-| 4:50 | Switch the model to GPT. Send: "Review the diff." | The Reviewer subagent returns a structured review. |
+| 4:50 | Switch the model to GPT. Send: "Review the diff." | A review subagent returns a structured review. |
 | 5:40 | Click **Harness console**. | The same session as the harness records it: the raw loop. |
 | 6:30 | | Close on the meters: tokens in and out, the share read from the provider cache, recoveries, and the work kept after the worker loss. |
 
@@ -127,5 +127,5 @@ About 70% of the input is read from the provider's cache, which providers bill a
 ## Notes
 
 - The harness is pre-1.0 and pinned at 0.7.0. `harness_ext.py` uses a few of its private internals; `tests/test_harness_ext.py` fails if they move.
-- MCP servers and the "Never ask" posture are local only. In the catalog, MCP is off and the judge can approve only reads and file edits.
+- MCP servers are local only. In the catalog, MCP is off and the judge can approve only reads and file edits. "Never ask" is available everywhere: every tool call runs without asking.
 - There is no patching. Workers are versioned and workflows are PINNED; a code change ships as a new Worker Deployment Version.
