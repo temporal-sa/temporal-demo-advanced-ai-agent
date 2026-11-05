@@ -1777,7 +1777,7 @@ class ProductViewConfigTests(AgentRoutesTestBase):
     def test_temporal_ui_link(self) -> None:
         def link(**env: str) -> dict[str, Any]:
             with mock.patch.dict(os.environ, env):
-                for name in ("TEMPORAL_UI_URL", "TEMPORAL_ADDRESS", "TEMPORAL_ENDPOINT", "TEMPORAL_NAMESPACE"):
+                for name in ("TEMPORAL_UI_URL", "TEMPORAL_UI_NAMESPACE", "TEMPORAL_ADDRESS", "TEMPORAL_ENDPOINT", "TEMPORAL_NAMESPACE"):
                     if name not in env:
                         os.environ.pop(name, None)
                 return self.config()["links"]["temporal_ui"]
@@ -1793,6 +1793,10 @@ class ProductViewConfigTests(AgentRoutesTestBase):
         self.assertEqual(
             link(TEMPORAL_UI_URL="https://ui.example/", TEMPORAL_NAMESPACE="a b")["url_template"],
             "https://ui.example/namespaces/a%20b/workflows/{workflow_id}",
+        )
+        self.assertEqual(
+            link(TEMPORAL_UI_URL="https://ws.example/_temporal", TEMPORAL_UI_NAMESPACE="demo", TEMPORAL_NAMESPACE="other")["url_template"],
+            "https://ws.example/_temporal/namespaces/demo/workflows/{workflow_id}",
         )
         off = link(TEMPORAL_UI_URL="off")
         self.assertEqual((off["enabled"], off["url_template"]), (False, None))

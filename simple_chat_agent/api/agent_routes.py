@@ -104,6 +104,7 @@ from simple_chat_agent.api import agent_models
 from simple_chat_agent.api.agent_mcp import create_mcp_router, mcp_enabled, mcp_feature
 from simple_chat_agent.api.agent_bridge import Bridge
 from simple_chat_agent.api.agent_store import MAX_SEQ, AgentStore, prefix, session_ttl_seconds
+from simple_chat_agent.api.temporal_ui import temporal_ui_namespace
 
 log = logging.getLogger(__name__)
 
@@ -290,7 +291,7 @@ def view_links() -> dict[str, Any]:
     URL-encoded. A disabled link has ``url_template: null`` and a ``reason``."""
     console_on, console_reason = console_link_status()
     base = temporal_ui_base()
-    namespace = quote(os.environ.get("TEMPORAL_NAMESPACE", "default"), safe="")
+    namespace = quote(temporal_ui_namespace(os.environ.get("TEMPORAL_NAMESPACE", "default")), safe="")
     return {
         "console": {
             "enabled": console_on,

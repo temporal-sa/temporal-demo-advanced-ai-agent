@@ -17,6 +17,16 @@ def temporal_ui_base_url() -> str:
     return "http://localhost:8233"
 
 
+def temporal_ui_namespace(namespace: str) -> str:
+    """The namespace Temporal UI links open.
+
+    The demo platform sets TEMPORAL_UI_NAMESPACE for this: the qualified Cloud
+    namespace, or a crashable workspace's dev server namespace. Without it, the
+    namespace the app is connected to.
+    """
+    return os.environ.get("TEMPORAL_UI_NAMESPACE") or namespace
+
+
 def temporal_ui_user_workflows_url(
     email: str,
     *,
@@ -30,7 +40,7 @@ def temporal_ui_user_workflows_url(
     if not search_attr_name or not email:
         return None
     base_url = temporal_ui_base_url().rstrip("/")
-    namespace_path = quote(namespace, safe="")
+    namespace_path = quote(temporal_ui_namespace(namespace), safe="")
     # UserEmail is a Keyword attribute, matching the Workflow's typed value.
     query = quote(f'{search_attr_name} = "{email}"', safe="")
     return f"{base_url}/namespaces/{namespace_path}/workflows?query={query}"
@@ -38,7 +48,7 @@ def temporal_ui_user_workflows_url(
 
 def temporal_ui_url(*, namespace: str, workflow_id: str, run_id: str) -> str:
     base_url = temporal_ui_base_url().rstrip("/")
-    namespace_path = quote(namespace, safe="")
+    namespace_path = quote(temporal_ui_namespace(namespace), safe="")
     workflow_path = quote(workflow_id, safe="")
     run_path = quote(run_id, safe="")
     if run_path:
