@@ -31,6 +31,7 @@ with workflow.unsafe.imports_passed_through():
         ToolApprovalPolicy,
     )
     from temporal_agent_harness.harness.agent_workflow import AgentWorkflowRunner, _current_runner
+    from temporal_agent_harness.harness.redis_event_stream import RedisEventStream
 
     from simple_chat_agent.agent import approvals, context, harness_ext
     from simple_chat_agent.agent.contracts import (  # message models live in contracts (key-free)
@@ -156,7 +157,7 @@ class TaskAgent:
         self._stream = harness_ext.DrainableStream()
         self._runner = AgentWorkflowRunner(
             child_run_config(config, data.environment),
-            stream=self._stream,
+            stream=RedisEventStream(),
             # Used only when the parent passed no policy. The parent always passes its live one.
             approval_policy_default=ToolApprovalPolicy.allow_inherently_safe(),
             auto_approval_criteria_default=approvals.default_criteria(data.environment),

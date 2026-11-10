@@ -75,6 +75,7 @@ from simple_chat_agent.api import agent_telemetry as telemetry
 from simple_chat_agent.api.agent_store import AgentStore, LeaseLost, SessionMeta, fold, wake_pattern
 
 from simple_chat_agent.agent.contracts import STREAM_ACKED_SIGNAL, StreamAck
+from simple_chat_agent.agent.event_stream import EVENTS
 from simple_chat_agent.agent.harness_ext import install_merge_fixes
 
 # The harness merge gave up on a subagent still delivering when the consumer was slow (see
@@ -564,7 +565,7 @@ class _Forwarder:
             self.runs.setdefault(self.session, meta.run_id)
         await self._refresh_run(self.session)
         max_ro = from_offset
-        client = AgentClient(self.temporal, self.session)
+        client = AgentClient(self.temporal, self.session, event_stream=EVENTS)
         count = 0
         frames = await client.attach(on_item=lambda item, ro: (item, ro), from_offset=from_offset)
         watcher = asyncio.create_task(self._watch_workers())

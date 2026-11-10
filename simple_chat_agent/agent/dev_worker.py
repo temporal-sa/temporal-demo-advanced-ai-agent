@@ -31,6 +31,7 @@ from simple_chat_agent.agent.tools.code_mode import CODE_MODE_ACTIVITIES
 from simple_chat_agent.agent.tools.workspace import TEST_TOOLS, WORKSPACE_ACTIVITIES, WORKSPACE_TOOLS
 from simple_chat_agent.agent.sessions import CodingSessions
 from simple_chat_agent.agent.subagents import SUBAGENT_WORKFLOWS
+from simple_chat_agent.agent.event_stream import EVENTS
 from simple_chat_agent.agent.workflow import CodingAgent
 
 
@@ -43,7 +44,8 @@ async def main() -> None:
         os.environ.get("TEMPORAL_TEST_ADDRESS", "127.0.0.1:7244"),
         namespace=os.environ.get("TEMPORAL_NAMESPACE", "default"),
         plugins=[PydanticAIPlugin(), AgentHarnessPlugin(
-            tools=[*WORKSPACE_TOOLS, *TEST_TOOLS, *RESEARCH_TOOLS, *ARTIFACT_TOOLS], large_payload_offload=payload_storage()
+            tools=[*WORKSPACE_TOOLS, *TEST_TOOLS, *RESEARCH_TOOLS, *ARTIFACT_TOOLS], large_payload_offload=payload_storage(),
+            event_stream=EVENTS,
         )],
     )
     worker = Worker(

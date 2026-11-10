@@ -29,6 +29,7 @@ with workflow.unsafe.imports_passed_through():
         ToolApprovalDecision,
     )
     from temporal_agent_harness.harness.agent_workflow import AgentWorkflowRunner, MessageContext
+    from temporal_agent_harness.harness.redis_event_stream import RedisEventStream
     from temporalio.contrib.workflow_streams import WorkflowStream
 
     from simple_chat_agent.agent import approvals, context, harness_ext, mcp
@@ -224,7 +225,7 @@ class CodingAgent:
             )
         self._runner = AgentWorkflowRunner(
             config,
-            stream=self._stream,
+            stream=RedisEventStream(),
             approval_policy_default=approvals.policy_for(
                 data.posture, data.environment, also_allow=approvals.SUBAGENT_TOOL_NAMES
             ),
