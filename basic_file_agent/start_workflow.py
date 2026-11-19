@@ -8,8 +8,8 @@ import argparse
 import asyncio
 import uuid
 
-from temporal_agent_harness.harness.agent_client import AgentClient
-from temporal_agent_harness.harness.agent_protocol import AgentConfig, MessageHandlerEnd, ToolStartEvent
+from temporal_agent_kit.agent_client import AgentClient
+from temporal_agent_kit.agent_protocol import AgentConfig, MessageHandlerEnd, ToolStartEvent
 
 from basic_file_agent import TASK_QUEUE, WORKFLOW_TYPE, connect
 

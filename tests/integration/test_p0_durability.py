@@ -31,7 +31,7 @@ def chat_replies(c) -> list[dict]:
 
 
 async def status(client, workflow_id: str):
-    from temporal_agent_harness.harness.agent_client import AgentClient
+    from temporal_agent_kit.agent_client import AgentClient
 
     return await AgentClient(client, workflow_id).get_status()
 

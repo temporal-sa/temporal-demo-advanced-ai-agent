@@ -13,7 +13,7 @@ from basic_file_agent.workflow import FILE_AGENT, BasicFileAgent
 
 
 async def main() -> None:
-    # AgentHarnessPlugin(tools=TOOLS) registers the tool activities; AgentPlugin the model's.
+    # AgentKitPlugin(tools=TOOLS) registers the tool activities; AgentPlugin the model's.
     client = await connect(tools=TOOLS)
     worker = Worker(client, task_queue=TASK_QUEUE, workflows=[BasicFileAgent], plugins=[AgentPlugin(FILE_AGENT)])
     print(f"Worker listening on task queue {TASK_QUEUE!r}")

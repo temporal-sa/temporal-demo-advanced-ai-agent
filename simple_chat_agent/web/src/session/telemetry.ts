@@ -20,8 +20,10 @@ import type {
   WorkerHealth,
 } from "./types";
 
-/** The harness's own event types (client protocol.ts). Anything else not ours is unknown. */
+/** Agent Kit's own event types (temporal_agent_kit agent_protocol/events.py). Anything else not
+ *  ours is unknown. */
 export const HARNESS_EVENTS: ReadonlySet<string> = new Set([
+  "agent_closed",
   "auto_approval_evaluation_ended",
   "auto_approval_evaluation_error",
   "auto_approval_evaluation_started",
@@ -37,6 +39,9 @@ export const HARNESS_EVENTS: ReadonlySet<string> = new Set([
   "reply_delta",
   "state_patch",
   "state_snapshot",
+  "steering_claimed",
+  "steering_dropped",
+  "steering_enqueued",
   "subagent_message_sent",
   "subagent_reply_received",
   "subagent_started",

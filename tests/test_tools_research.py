@@ -13,7 +13,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import httpx
-from temporal_agent_harness.harness.agent import tool_activity
+from temporal_agent_kit.agent import tool_activity
 from temporalio.exceptions import ApplicationError
 
 from simple_chat_agent.agent import net_guard

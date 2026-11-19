@@ -75,8 +75,8 @@ class ForgetAlwaysAllowedTests(unittest.TestCase):
         self.assertEqual((reply.ok, reply.forgotten, reply.detail), (True, [], "Nothing was always allowed."))
 
     def test_declared_mid_turn_accept_and_not_model_callable(self) -> None:
-        from temporal_agent_harness.harness.agent_protocol import MidTurn
-        from temporal_agent_harness.harness.agent_workflow import agent_handlers  # type: ignore[attr-defined]
+        from temporal_agent_kit.agent_protocol import MidTurn
+        from temporal_agent_kit.agent_workflow import agent_handlers  # type: ignore[attr-defined]
 
         h = agent_handlers(CodingAgent)["forget_always_allowed"]
         self.assertEqual(h.mid_turn, MidTurn.ACCEPT)
@@ -85,7 +85,7 @@ class ForgetAlwaysAllowedTests(unittest.TestCase):
         self.assertIs(h.output_type, AlwaysAllowedForgotten)
 
     def test_subagents_do_not_have_it(self) -> None:
-        from temporal_agent_harness.harness.agent_workflow import agent_handlers  # type: ignore[attr-defined]
+        from temporal_agent_kit.agent_workflow import agent_handlers  # type: ignore[attr-defined]
 
         from simple_chat_agent.agent.subagents import SUBAGENT_WORKFLOWS
 
@@ -325,7 +325,7 @@ class ApprovalHistoryWiringTests(unittest.TestCase):
         return CodingAgent._limit_remember(agent, decision)
 
     def test_records_an_approval(self) -> None:
-        from temporal_agent_harness.harness.agent_protocol import ToolApprovalDecision
+        from temporal_agent_kit.agent_protocol import ToolApprovalDecision
 
         entries = {"t1": _ApprovalEntryStub("edit_file", {"path": "a.py", "content": "x = 1"})}
         agent = self.agent(entries)
@@ -338,7 +338,7 @@ class ApprovalHistoryWiringTests(unittest.TestCase):
         self.assertIn("a.py", entry.args_summary)
 
     def test_records_a_decline(self) -> None:
-        from temporal_agent_harness.harness.agent_protocol import ToolApprovalDecision
+        from temporal_agent_kit.agent_protocol import ToolApprovalDecision
 
         entries = {"t1": _ApprovalEntryStub("run_command", {"command": "rm -rf /"})}
         agent = self.agent(entries)
@@ -347,14 +347,14 @@ class ApprovalHistoryWiringTests(unittest.TestCase):
         self.assertFalse(agent._approval_history[0].approved)
 
     def test_unknown_tool_id_records_nothing(self) -> None:
-        from temporal_agent_harness.harness.agent_protocol import ToolApprovalDecision
+        from temporal_agent_kit.agent_protocol import ToolApprovalDecision
 
         agent = self.agent({})
         self.limit_remember(agent, ToolApprovalDecision(tool_id="missing", approved=True, reason=None))
         self.assertEqual(agent._approval_history, [])
 
     def test_still_limits_remember_to_workspace_edits(self) -> None:
-        from temporal_agent_harness.harness.agent_protocol import ToolApprovalDecision
+        from temporal_agent_kit.agent_protocol import ToolApprovalDecision
 
         entries = {"t1": _ApprovalEntryStub("run_command", {"command": "pytest"})}
         agent = self.agent(entries)
@@ -375,7 +375,7 @@ class ApprovalHistoryWiringTests(unittest.TestCase):
         self.assertEqual(CodingAgent._recent_approval_history(agent, "search_code"), [])
 
     def test_subagent_adopts_parent_history_and_records_its_own(self) -> None:
-        from temporal_agent_harness.harness.agent_protocol import ToolApprovalDecision
+        from temporal_agent_kit.agent_protocol import ToolApprovalDecision
 
         from simple_chat_agent.agent.contracts import ApprovalHistoryEntry
         from simple_chat_agent.agent.subagents import TaskAgent

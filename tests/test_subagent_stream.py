@@ -2,11 +2,13 @@
 
 Two causes, both reproduced with two parallel explorers (see the Eng G P3 report):
 
-1. A subagent completes as soon as its parent stops it. A completed workflow's stream can't be
-   polled, so a reader still behind lost the end of the subagent's turn. Fixed in the subagent:
-   ``harness_ext.DrainableStream`` + ``drain_stream`` in its ``@agent.teardown``.
+1. A subagent completes as soon as its parent stops it. A completed workflow's stream couldn't
+   be polled (temporalio < 1.35), so a reader still behind lost the end of the subagent's turn.
+   Fixed in the subagent: ``kit_ext.DrainableStream`` + ``drain_stream`` in its
+   ``@agent.teardown``. temporalio 1.35 reads a closed run's stream by query, which still needs
+   a worker of that build and unexpired history; the drain keeps the read on the open run.
 2. The harness merge gave a child up while it was still delivering, when the consumer was slow
-   (the bridge writes each frame to Redis). Fixed by ``harness_ext.install_merge_fixes``.
+   (the bridge writes each frame to Redis). Fixed by ``kit_ext.install_merge_fixes``.
 """
 
 from __future__ import annotations
@@ -25,18 +27,18 @@ from temporalio.contrib.workflow_streams import WorkflowStreamClient
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
-from temporal_agent_harness.harness.agent_protocol import AgentEvent
-from temporal_agent_harness.harness.agent_protocol.events import (
+from temporal_agent_kit.agent_protocol import AgentEvent
+from temporal_agent_kit.agent_protocol.events import (
     ReplyDelta,
     SubagentMessageSent,
     SubagentReplyReceived,
     TurnEnded,
     TurnStarted,
 )
-from temporal_agent_harness.harness.stream_merge import cursor as cursor_mod
-from temporal_agent_harness.harness.stream_merge import merge as merge_mod
+from temporal_agent_kit.stream_merge import cursor as cursor_mod
+from temporal_agent_kit.stream_merge import merge as merge_mod
 
-from simple_chat_agent.agent import harness_ext
+from simple_chat_agent.agent import kit_ext
 
 
 # -- 1. drain before completing ------------------------------------------------------------
@@ -49,7 +51,7 @@ class _ClosingStream:
 
     @workflow.init
     def __init__(self, drain: bool) -> None:
-        self._stream = harness_ext.DrainableStream()
+        self._stream = kit_ext.DrainableStream()
         self._finish = False
 
     @workflow.signal
@@ -66,7 +68,7 @@ class _ClosingStream:
             topic.publish(i)
         if not drain:
             return None
-        return await harness_ext.drain_stream(self._stream, timeout=timedelta(seconds=5))
+        return await kit_ext.drain_stream(self._stream, timeout=timedelta(seconds=5))
 
 
 class DrainTests(unittest.IsolatedAsyncioTestCase):
@@ -99,10 +101,12 @@ class DrainTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(got, list(range(8)))
         self.assertTrue(caught_up)
 
-    async def test_without_draining_the_reader_loses_the_end(self) -> None:
-        """The failure the drain fixes (the stream of a completed workflow can't be read)."""
+    async def test_without_draining_a_worker_still_serves_the_end(self) -> None:
+        """Since temporalio 1.35 a completed workflow's stream is read by a query, so with a
+        worker running the reader gets the end without the drain. The drain keeps the reader on
+        the open run, which needs no worker of the subagent's build or unexpired history."""
         got, _ = await self.read_lagging(drain=False)
-        self.assertEqual(got, [0, 1, 2])
+        self.assertEqual(got, list(range(8)))
 
 
 # -- 2. the merge keeps a slow consumer's child -----------------------------------------------
@@ -177,7 +181,7 @@ class MergeReapTests(unittest.IsolatedAsyncioTestCase):
         return out
 
     async def test_slow_consumer_keeps_every_child_event(self) -> None:
-        harness_ext.install_merge_fixes()
+        kit_ext.install_merge_fixes()
         out = await self.merged()
         self.assertFalse([e for e in out if e.endswith("subagent_stream_unavailable")], out)
         for sub in "ab":

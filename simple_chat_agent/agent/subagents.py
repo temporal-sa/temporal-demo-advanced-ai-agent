@@ -24,15 +24,15 @@ with workflow.unsafe.imports_passed_through():
     from pydantic import BaseModel, Field
     from pydantic_ai.messages import ModelMessage
 
-    from temporal_agent_harness.harness import agent
-    from temporal_agent_harness.harness.agent_protocol import (
+    from temporal_agent_kit import agent
+    from temporal_agent_kit.agent_protocol import (
         AgentConfig,
         ToolApprovalDecision,
         ToolApprovalPolicy,
     )
-    from temporal_agent_harness.harness.agent_workflow import AgentWorkflowRunner, _current_runner
+    from temporal_agent_kit.agent_workflow import AgentWorkflowRunner, _current_runner
 
-    from simple_chat_agent.agent import approvals, context, harness_ext
+    from simple_chat_agent.agent import approvals, context, kit_ext
     from simple_chat_agent.agent.contracts import (  # message models live in contracts (key-free)
         SUBAGENT_APPROVAL_HISTORY_SIGNAL,
         TASK_AGENT_WORKFLOW_TYPE,
@@ -153,7 +153,7 @@ class TaskAgent:
         self._approval_history: list[ApprovalHistoryEntry] = []
         self._turn_decisions: list[ApprovalHistoryEntry] = []
         # The harness requires the stream to be built directly in @workflow.init.
-        self._stream = harness_ext.DrainableStream()
+        self._stream = kit_ext.DrainableStream()
         self._runner = AgentWorkflowRunner(
             child_run_config(config, data.environment),
             stream=self._stream,
@@ -168,15 +168,15 @@ class TaskAgent:
                 history_provider=self._recent_approval_history,
             ),
         )
-        harness_ext.guard_tool_approval(self._runner, self._limit_remember)
+        kit_ext.guard_tool_approval(self._runner, self._limit_remember)
         self._history: list[ModelMessage] = []
 
     def _limit_remember(self, decision: ToolApprovalDecision) -> ToolApprovalDecision:
         """Same "always allow" limit as the parent, and the same approval history: a decision
         that reached a person here is precedent for the next call, on this child and (once
         signaled) on the parent."""
-        tool = harness_ext.pending_tool_name(self._runner, decision.tool_id) or ""
-        tool_input = harness_ext.pending_tool_input(self._runner, decision.tool_id)
+        tool = kit_ext.pending_tool_name(self._runner, decision.tool_id) or ""
+        tool_input = kit_ext.pending_tool_input(self._runner, decision.tool_id)
         if tool and tool_input is not None:
             self._turn_decisions.append(
                 approvals.record_decision(
@@ -210,8 +210,8 @@ class TaskAgent:
     async def _drain_stream(self) -> None:
         """Let the bridge read this subagent's last events before the workflow completes: a
         completed workflow's stream can't be read, and the parent stops a subagent when its
-        turn ends (see harness_ext.DrainableStream)."""
-        await harness_ext.drain_stream(self._stream)
+        turn ends (see kit_ext.DrainableStream)."""
+        await kit_ext.drain_stream(self._stream)
 
     @agent.accepts
     async def task(self, msg: TaskRequest) -> TaskResult:
@@ -223,7 +223,7 @@ class TaskAgent:
         def on_result(name: str, tool_id: str, args: dict[str, Any], result: Any) -> None:
             merge_changes(changes, touched_files(result), new_commits(result, args), tool_id=tool_id)
 
-        toolset = harness_ext.per_run_toolset(
+        toolset = kit_ext.per_run_toolset(
             _child_tools(self._data),
             id="subagent",
             injections={
@@ -249,7 +249,7 @@ class TaskAgent:
         review = result.output if isinstance(result.output, Review) else None
         await self._report_approval_decisions()
         return TaskResult(
-            subagent_id=harness_ext.agent_id(self._runner),
+            subagent_id=kit_ext.agent_id(self._runner),
             subagent_type=self._data.subagent_type,
             text=review.as_text() if review else str(result.output),
             review=review,
@@ -294,7 +294,7 @@ def subagent_tools(
         the same subagent. A subagent uses your approval rules, including auto mode: a call
         it makes is judged or asked the same way the call would be if you made it."""
         runner = _current_runner()
-        active = harness_ext.active_subagent_ids(runner)
+        active = kit_ext.active_subagent_ids(runner)
         if call.resume:
             if call.resume not in active:
                 raise ApplicationError(

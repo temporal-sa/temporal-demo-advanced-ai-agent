@@ -157,6 +157,15 @@ describe("other frames", () => {
     expect(t.calls).toHaveLength(0);
     expect(t.worker.answering).toBe(true);
   });
+
+  it("knows the events Agent Kit added after 0.7 (agent_closed, steering_*)", () => {
+    const t = fold([
+      { event: "steering_enqueued", data: { steering_id: "s1", text: "x" } },
+      { event: "steering_dropped", data: { steering_ids: ["s1"] } },
+      { event: "agent_closed", data: { reason: "requested" } },
+    ]);
+    expect(t.unknownFrames).toEqual({});
+  });
 });
 
 describe("TelemetryFolder", () => {

@@ -290,7 +290,7 @@ def mcp_oauth_provider_for_flow(
         server_url=flow.server_url,
         client_metadata=OAuthClientMetadata(
             redirect_uris=[redirect_uri or mcp_redirect_uri(flow.flow_id)],
-            client_name="Temporal Agent Harness Example",
+            client_name="Temporal Agent Kit Example",
             scope=None,
         ),
         storage=AppMcpTokenStorage(
@@ -346,7 +346,7 @@ def mcp_oauth_provider_for_connection(
         server_url=server_url,
         client_metadata=OAuthClientMetadata(
             redirect_uris=[mcp_redirect_uri("reauthorize")],
-            client_name="Temporal Agent Harness Example",
+            client_name="Temporal Agent Kit Example",
             scope=None,
         ),
         storage=AppMcpTokenStorage(

@@ -53,7 +53,7 @@ Register `CodingAgentOwner` (Keyword) in the namespace before the first deploy. 
 
 | Feature | Catalog default | Switch |
 |---|---|---|
-| Harness console (`/console/`) | On | `CONSOLE_ENABLED=0` (or `false`, `no`, `off`) turns it off. Its routes are owner-scoped and cross-user tested (D8). |
+| Agent Kit console (`/console/`) | On | `CONSOLE_ENABLED=0` (or `false`, `no`, `off`) turns it off. Its routes are owner-scoped and cross-user tested (D8). |
 | MCP servers | Off, and the routes refuse to register anything (D7) | Local only in release 1 |
 | Provider web search | Off | `AGENT_WEB_SEARCH_CATALOG=1` makes it available; each session still starts with it off. `AGENT_WEB_SEARCH=off` turns it off everywhere. |
 | "Never ask" posture | Available | Every tool call runs without asking, in the catalog and locally |

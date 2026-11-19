@@ -85,8 +85,8 @@ class SettingTests(unittest.TestCase):
         self.assertEqual((ack.ok, ack.web_search, refused._data.web_search), (False, False, False))
 
     def test_declared_mid_turn_accept_and_not_model_callable(self) -> None:
-        from temporal_agent_harness.harness.agent_protocol import MidTurn
-        from temporal_agent_harness.harness.agent_workflow import agent_handlers  # type: ignore[attr-defined]
+        from temporal_agent_kit.agent_protocol import MidTurn
+        from temporal_agent_kit.agent_workflow import agent_handlers  # type: ignore[attr-defined]
 
         h = agent_handlers(CodingAgent)["set_web_search"]
         self.assertEqual((h.mid_turn, h.model_callable), (MidTurn.ACCEPT, False))

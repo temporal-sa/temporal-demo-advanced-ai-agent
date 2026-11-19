@@ -23,10 +23,10 @@ from temporalio.client import Client
 from temporalio.common import VersioningBehavior, WorkerDeploymentVersion
 from temporalio.worker import Worker, WorkerDeploymentConfig
 
-from temporal_agent_harness.plugin import AgentHarnessPlugin
+from temporal_agent_kit.plugin import AgentKitPlugin
 
 from simple_chat_agent.agent.approvals import APPROVAL_ACTIVITIES, typesafe_plugin_if_configured
-from simple_chat_agent.agent.harness_ext import payload_storage
+from simple_chat_agent.agent.kit_ext import payload_storage
 from simple_chat_agent.agent.mcp import MCP_ACTIVITIES
 from simple_chat_agent.agent.runtime import CODING_AGENT
 from simple_chat_agent.agent.sessions import CodingSessions
@@ -62,7 +62,7 @@ async def connect() -> Client:
         plugins.append(typesafe)
     # The harness plugin goes last, so it keeps the Pydantic converter the others installed.
     plugins.append(
-        AgentHarnessPlugin(
+        AgentKitPlugin(
             tools=[
                 *WORKSPACE_TOOLS,
                 *RESEARCH_TOOLS,

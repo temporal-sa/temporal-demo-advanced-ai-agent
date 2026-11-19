@@ -68,17 +68,17 @@ from typing import Any
 from temporalio.client import Client
 from temporalio.service import RPCError, RPCStatusCode
 
-from temporal_agent_harness.harness.agent_client import AgentClient
-from temporal_agent_harness.harness.agent_protocol import AgentEvent
+from temporal_agent_kit.agent_client import AgentClient
+from temporal_agent_kit.agent_protocol import AgentEvent
 
 from simple_chat_agent.api import agent_telemetry as telemetry
 from simple_chat_agent.api.agent_store import AgentStore, LeaseLost, SessionMeta, fold, wake_pattern
 
 from simple_chat_agent.agent.contracts import STREAM_ACKED_SIGNAL, StreamAck
-from simple_chat_agent.agent.harness_ext import install_merge_fixes
+from simple_chat_agent.agent.kit_ext import install_merge_fixes
 
 # The harness merge gave up on a subagent still delivering when the consumer was slow (see
-# harness_ext.install_merge_fixes): our consumer is the slow one (a Redis write per frame).
+# kit_ext.install_merge_fixes): our consumer is the slow one (a Redis write per frame).
 install_merge_fixes()
 
 log = logging.getLogger(__name__)

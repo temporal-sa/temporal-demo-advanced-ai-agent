@@ -15,9 +15,9 @@ from pydantic_ai.messages import NativeToolReturnPart
 from temporalio.common import RetryPolicy
 from temporalio.workflow import ActivityConfig
 
-from temporal_agent_harness.ai_sdks.pydantic_ai_harness import HarnessDeps
+from temporal_agent_kit.ai_sdks.pydantic_ai import KitDeps
 
-from simple_chat_agent.agent import harness_ext
+from simple_chat_agent.agent import kit_ext
 from simple_chat_agent.agent.contracts import MAX_WEB_SOURCES, ModelChoice, WebSource
 from simple_chat_agent.agent.model_registry import build_registry, settings_for
 from simple_chat_agent.agent.tools.research import RESEARCH_TOOLS  # noqa: F401 - re-exported
@@ -25,7 +25,7 @@ from simple_chat_agent.agent.tools.research import RESEARCH_TOOLS  # noqa: F401 
 AGENT_NAME = "coding-agent"
 
 
-class CodingDeps(HarnessDeps):
+class CodingDeps(KitDeps):
     """Run deps: the harness runner and stream context, plus who the run is for. The ids
     travel into the model activity, where spend caps are checked and recorded."""
 
@@ -59,7 +59,7 @@ ALLOWED_KEYS = frozenset(MODELS)
 _DEFAULT_PROVIDER, _, _DEFAULT_NAME = next(iter(MODELS)).partition(":")
 DEFAULT_MODEL = ModelChoice(provider=_DEFAULT_PROVIDER, model=_DEFAULT_NAME)  # type: ignore[arg-type]
 
-CODING_AGENT = harness_ext.QuietTemporalAgent(
+CODING_AGENT = kit_ext.QuietTemporalAgent(
     Agent(
         MODELS[next(iter(MODELS))],
         # Instructions are passed per run: the coding agent and its subagents share this
@@ -68,7 +68,7 @@ CODING_AGENT = harness_ext.QuietTemporalAgent(
     ),
     name=AGENT_NAME,
     models=MODELS,
-    event_stream_handler=harness_ext.coding_event_stream_handler,
+    event_stream_handler=kit_ext.coding_event_stream_handler,
     model_activity_config=MODEL_ACTIVITY,
 )
 

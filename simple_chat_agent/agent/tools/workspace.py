@@ -90,9 +90,9 @@ from temporalio.common import RetryPolicy
 from temporalio.exceptions import ApplicationError
 from temporalio.workflow import ActivityConfig
 
-from temporal_agent_harness.harness import agent
-from temporal_agent_harness.harness.agent_protocol.events import ToolProgressDelta
-from temporal_agent_harness.harness.agent_workflow import AgentWorkflowRunner
+from temporal_agent_kit import agent
+from temporal_agent_kit.agent_protocol.events import ToolProgressDelta
+from temporal_agent_kit.agent_workflow import AgentWorkflowRunner
 
 # -- Limits ---------------------------------------------------------------------------------
 
@@ -1768,7 +1768,7 @@ WORKSPACE_TOOLS = (
     git_diff,
     git_commit,
 )
-# Activities the worker must register itself: AgentHarnessPlugin(tools=...) registers the
+# Activities the worker must register itself: AgentKitPlugin(tools=...) registers the
 # activity tools' bodies but skips inline tools such as run_command.
 WORKSPACE_ACTIVITIES = [run_command_activity]
 

@@ -1073,7 +1073,7 @@ class StaticTablesTests(unittest.TestCase):
     def test_interface_matches_workflow_handlers(self) -> None:
         os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-not-used")
         os.environ.setdefault("OPENAI_API_KEY", "test-key-not-used")
-        from temporal_agent_harness.harness.agent_workflow import agent_handlers
+        from temporal_agent_kit.agent_workflow import agent_handlers
 
         from simple_chat_agent.agent.subagents import TaskAgent
         from simple_chat_agent.agent.workflow import CodingAgent
@@ -1368,7 +1368,7 @@ class ReviewFixTests(_RouteHelpers, AgentRoutesTestBase):
         self.assertEqual(self.run_async(self.store.meta(child)).pending, set())
 
     def test_minor2_subagent_approvals_use_the_childs_update(self) -> None:
-        from temporal_agent_harness.harness.agent_protocol import ToolApprovalDecision
+        from temporal_agent_kit.agent_protocol import ToolApprovalDecision
         from temporalio.client import WorkflowUpdateRPCTimeoutOrCancelledError
 
         root = self.create()["workflow_id"]

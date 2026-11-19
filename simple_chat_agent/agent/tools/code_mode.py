@@ -5,7 +5,7 @@ workflow code). The script can call the workspace's read tools as async host fun
 the workspace as files under ``/workspace``. Built once per run in ``CodingAgent.__init__`` by
 :func:`build_code_mode_tool`.
 
-* **Limits** (``harness_ext.ScriptLimits``): at most 16 host-function calls and 64 file
+* **Limits** (``kit_ext.ScriptLimits``): at most 16 host-function calls and 64 file
   operations per script, at most 4 of them in flight at once. Over-limit calls raise
   ``RuntimeError`` inside the script.
 * **Approval**: ``run_script`` itself is gated (never inherently safe; risk class
@@ -36,14 +36,14 @@ from pydantic import BaseModel
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-from temporal_agent_harness.harness.code_mode import ActivityFileSystem, FileStat, VFSMount
+from temporal_agent_kit.code_mode import ActivityFileSystem, FileStat, VFSMount
 
-from simple_chat_agent.agent import harness_ext
+from simple_chat_agent.agent import kit_ext
 from simple_chat_agent.agent.tools.workspace import _files_call, git_diff, git_status, list_files, read_file, search_code
 
 CODE_MODE_TOOL_NAME = "run_script"
 WORKSPACE_MOUNT = "/workspace"
-SCRIPT_LIMITS = harness_ext.ScriptLimits(max_host_calls=16, max_file_ops=64, concurrency=4)
+SCRIPT_LIMITS = kit_ext.ScriptLimits(max_host_calls=16, max_file_ops=64, concurrency=4)
 # The tools a script may call as host functions: the workspace's read-only tools.
 HOST_TOOLS = (list_files, read_file, search_code, git_status, git_diff)
 # Executor ids: what the API mints for sessions (coding-agent-<hex>) and tests use.
@@ -136,7 +136,7 @@ def build_code_mode_tool(workspace_id: str) -> Any:
         read_only=True,
         description="the session's workspace (the repository you work in), read-only",
     )
-    return harness_ext.limited_code_mode_tool(
+    return kit_ext.limited_code_mode_tool(
         HOST_TOOLS,
         name=CODE_MODE_TOOL_NAME,
         injections={"workspace_id": workspace_id},

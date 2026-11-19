@@ -17,8 +17,8 @@ class GuardrailHandlersTests(unittest.TestCase):
     """§5 rule 3: the model can't change its own guardrails."""
 
     def test_settings_handlers_are_not_model_callable(self) -> None:
-        from temporal_agent_harness.harness.agent_protocol import MidTurn
-        from temporal_agent_harness.harness.agent_workflow import agent_handlers  # type: ignore[attr-defined]
+        from temporal_agent_kit.agent_protocol import MidTurn
+        from temporal_agent_kit.agent_workflow import agent_handlers  # type: ignore[attr-defined]
 
         from simple_chat_agent.agent.workflow import CodingAgent
 
@@ -85,17 +85,17 @@ class ModelRetryPolicyTests(unittest.TestCase):
         from pydantic_ai.exceptions import ModelHTTPError
         from temporalio.exceptions import ApplicationError
 
-        from simple_chat_agent.agent import harness_ext
+        from simple_chat_agent.agent import kit_ext
 
         for status in (400, 401, 403, 404, 422):
             with self.subTest(status=status):
-                out = harness_ext._classify(ModelHTTPError(status, "m", body={"error": "nope"}))
+                out = kit_ext._classify(ModelHTTPError(status, "m", body={"error": "nope"}))
                 self.assertIsInstance(out, ApplicationError)
                 self.assertEqual((out.type, out.non_retryable), ("ProviderRejected", True))
         for status in (408, 409, 429, 500, 529):
             with self.subTest(status=status):
                 err = ModelHTTPError(status, "m", body={"error": "busy"})
-                self.assertIs(harness_ext._classify(err), err)
+                self.assertIs(kit_ext._classify(err), err)
 
 
 class EnvFilesIgnoredTests(unittest.TestCase):
