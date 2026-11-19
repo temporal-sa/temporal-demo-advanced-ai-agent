@@ -2,7 +2,7 @@
 // results, mini-diffs and path chips. Pure. Tool names and result text come from
 // simple_chat_agent/agent/tools/workspace.py (`model_text()` is what reaches the stream).
 
-import type { ToolPart } from "../session";
+import { toolOutputText, type ToolPart } from "../session";
 import { mcpTool, toolArgs } from "../session/extras";
 
 export type BadgeKind = "read" | "edit" | "shell" | "git" | "agent" | "good" | "prog";
@@ -182,7 +182,7 @@ function bounded(rows: DiffRow[], max: number, added?: number, removed?: number)
 export function miniDiff(part: Pick<ToolPart, "toolName" | "input" | "output" | "state">, max = 12): MiniDiff | null {
   const i = part.input ?? {};
   if (part.toolName === "edit_file") {
-    const out = part.output ?? "";
+    const out = toolOutputText(part.output) ?? "";
     const nl = out.indexOf("\n");
     if (out.startsWith("Edited ") && nl > 0) {
       const head = /\(\+(\d+) -(\d+)\)/.exec(out.slice(0, nl));
@@ -200,7 +200,7 @@ export function miniDiff(part: Pick<ToolPart, "toolName" | "input" | "output" | 
     return null;
   }
   if (part.toolName === "write_file") {
-    const out = part.output ?? "";
+    const out = toolOutputText(part.output) ?? "";
     const head = /\(\d+ bytes, \+(\d+) -(\d+)\)/.exec(out);
     const content = str(i, "content");
     const created = out.startsWith("Created ") || (!out && content !== "");
@@ -221,7 +221,7 @@ export function pathsOf(part: Pick<ToolPart, "toolName" | "input" | "output">): 
   const i = part.input ?? {};
   const paths = new Set<string>();
   if (["read_file", "write_file", "edit_file"].includes(part.toolName) && str(i, "path")) paths.add(str(i, "path"));
-  if (part.toolName === "run_command") for (const c of commandSummary(part.output)?.changed ?? []) paths.add(c.path);
+  if (part.toolName === "run_command") for (const c of commandSummary(toolOutputText(part.output))?.changed ?? []) paths.add(c.path);
   return [...paths];
 }
 

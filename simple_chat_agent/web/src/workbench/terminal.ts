@@ -2,7 +2,7 @@
 // and the markers for a paused stream, a reattached run and a sandbox that isn't answering.
 // Pure, apart from RunClock, which remembers when this browser saw each run start.
 
-import type { Recovery, SandboxHealth, ToolPart, ToolProgressChunk } from "../session";
+import { toolOutputText, type Recovery, type SandboxHealth, type ToolPart, type ToolProgressChunk } from "../session";
 import { strArg, type LocatedTool } from "./tree";
 
 export const COMMAND_TOOLS: ReadonlySet<string> = new Set(["run_command", "workspace.run_command"]);
@@ -131,7 +131,7 @@ export function exitBadge(
       return { text: `running${t}`, tone: "run" };
     }
     case "done": {
-      const out = parseCommandOutput(part.output);
+      const out = parseCommandOutput(toolOutputText(part.output));
       if (!out) return { text: "finished", tone: "muted" };
       if (out.timedOut) return { text: "timed out", tone: "fail" };
       if (out.exitCode === null) return { text: "exit not reported", tone: "muted" };
@@ -242,7 +242,7 @@ export function runLines(part: Pick<ToolPart, "state" | "output" | "input">, ctx
   const lines: TermLine[] = [{ kind: "cmd", text: `$ ${strArg(part.input, "command")}` }];
   const running = part.state === "running" || part.state === "approved" || part.state === "awaiting_callback";
   if (part.state === "done") {
-    const out = parseCommandOutput(part.output);
+    const out = parseCommandOutput(toolOutputText(part.output));
     if (out?.reattached || ctx.reattach) lines.push({ kind: "reattach", text: reattachLine(ctx.reattach?.resumedOn ?? null) });
     if (out) {
       if (out.error && !out.timedOut) lines.push({ kind: "muted", text: out.error });
@@ -250,7 +250,7 @@ export function runLines(part: Pick<ToolPart, "state" | "output" | "input">, ctx
       lines.push(...textLines(out.stderr, "err", false));
       if (out.truncated) lines.push({ kind: "muted", text: "Output shortened. The full log stays in the sandbox." });
     } else if (part.output) {
-      lines.push(...textLines(part.output, "out", false));
+      lines.push(...textLines(toolOutputText(part.output) ?? "", "out", false));
     }
     return lines;
   }

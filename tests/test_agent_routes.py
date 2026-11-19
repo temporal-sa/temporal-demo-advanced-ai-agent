@@ -16,7 +16,7 @@ import unittest
 import uuid
 from pathlib import Path
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Any
 from unittest import mock
@@ -993,6 +993,40 @@ class ConfigTests(AgentRoutesTestBase):
             self.create(model={"provider": "openai", "model": "gpt-x"})
             r = self.client.post("/api/agent/sessions", json={"model": {"provider": "openai", "model": "gpt-5.4-mini"}}, headers=A)
             self.assertEqual(r.json()["error"], "model_not_allowed")
+
+
+class IdleCloseTests(AgentRoutesTestBase):
+    """Sessions close themselves after AGENT_CLOSE_AFTER_IDLE_MINUTES idle (kit close_after_idle)."""
+
+    def test_sessions_start_with_the_idle_close_and_config_reports_it(self) -> None:
+        self.create()
+        config = self.temporal.starts[-1]["args"][0]
+        self.assertEqual(config.close_after_idle, timedelta(minutes=30))
+        self.assertEqual(self.client.get("/api/agent/config", headers=A).json()["close_after_idle_minutes"], 30)
+
+    def test_setting(self) -> None:
+        for raw, minutes in (("", 30), ("45", 45), ("0", 0)):
+            with mock.patch.dict(os.environ, {"AGENT_CLOSE_AFTER_IDLE_MINUTES": raw}):
+                self.assertEqual(agent_routes.close_after_idle_minutes(), minutes)
+        for raw in ("-1", "1.5", "soon"):
+            with mock.patch.dict(os.environ, {"AGENT_CLOSE_AFTER_IDLE_MINUTES": raw}):
+                with self.assertRaisesRegex(ValueError, "AGENT_CLOSE_AFTER_IDLE_MINUTES"):
+                    agent_routes.close_after_idle_minutes()
+
+    def test_sends_to_an_ended_session_say_so_and_list_it_closed(self) -> None:
+        sid = self.create()["workflow_id"]
+        del self.temporal.workflows[sid]  # the workflow completed (idle close): Signals find nothing
+        sends = [
+            ("/messages", {"session_id": sid, "message": {"type": "chat", "payload": {"text": "hi"}}}),
+            ("/approve", {"session_id": sid, "tool_id": "t", "approved": True}),
+            ("/callback-result", {"session_id": sid, "tool_id": "t", "result": 1}),
+        ]
+        for path, body in sends:
+            with self.subTest(path=path):
+                r = self.client.post(f"/api/agent{path}", json=body, headers=A)
+                self.assertEqual((r.status_code, r.json()["error"]), (409, "session_closed"), r.text)
+        listed = {s["session_id"]: s for s in self.client.get("/api/agent/sessions", headers=A).json()}
+        self.assertTrue(listed[sid]["closed"])
 
 
 class UploadAndLogTests(AgentRoutesTestBase):

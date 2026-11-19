@@ -1,5 +1,5 @@
-// useCodingSession: the facade over @temporalio/agent-harness-react (PRD U1). This folder is
-// the only place that imports the harness packages.
+// useCodingSession: the facade over @temporalio/agent-kit-react (PRD U1). This folder is
+// the only place that imports the Agent Kit packages.
 
 import {
   createContext,
@@ -12,7 +12,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { HarnessProvider, HttpTransport, SessionStore, useAgentSession } from "@temporalio/agent-harness-react";
+import { KitProvider, HttpTransport, SessionStore, useAgentSession } from "@temporalio/agent-kit-react";
 
 import { AGENT_API_BASE, ApiError, CLIENT_HEADERS, getStatus, readLog, sendCallbackResult, uploadAttachment, uploadPickedFile } from "./api";
 import { callbackRequest, callbackStatus, webSearchOn, type CallbackSend } from "./extras";
@@ -50,7 +50,7 @@ import type {
   WorkspaceState,
 } from "./types";
 
-/** One transport for the app: our API's harness routes, same-origin. */
+/** One transport for the app: our API's Agent Kit transport routes, same-origin. */
 const transport = new HttpTransport({ baseUrl: AGENT_API_BASE, headers: CLIENT_HEADERS });
 
 // -- provider --------------------------------------------------------------------------------
@@ -68,7 +68,7 @@ export function CodingSessionProvider({ children }: { children?: ReactNode }) {
   return createElement(
     ReconnectContext.Provider,
     { value: reconnector },
-    createElement(HarnessProvider, { store }, children),
+    createElement(KitProvider, { store }, children),
   );
 }
 
@@ -104,7 +104,7 @@ export function useCodingSession(sessionId: string, seed: SessionSeed = {}): Cod
   const latest = useRef(h);
   latest.current = h;
 
-  // Telemetry: folded incrementally from the frames the harness keeps.
+  // Telemetry: folded incrementally from the frames the Agent Kit client keeps.
   const folder = useRef<{ id: string; folder: TelemetryFolder } | null>(null);
   if (folder.current?.id !== sessionId) folder.current = { id: sessionId, folder: new TelemetryFolder() };
   const activeFolder = folder.current.folder;

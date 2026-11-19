@@ -11,7 +11,7 @@
 #
 # No keys are baked in: .dockerignore drops every .env file, and the catalog injects secrets at
 # run time. Built for linux/amd64 to match the EKS node architecture.
-FROM node:22-bookworm-slim AS web-build
+FROM node:26-trixie-slim AS web-build
 
 WORKDIR /app/simple_chat_agent/web
 
@@ -22,7 +22,7 @@ RUN npm ci
 COPY simple_chat_agent/web ./
 RUN npm run build
 
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS build
+FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim AS build
 
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 \
@@ -32,7 +32,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 
-FROM python:3.12-slim
+FROM python:3.14-slim-trixie
 
 WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH" \
@@ -58,7 +58,7 @@ RUN apt-get update \
         tini \
         util-linux \
     && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir "pytest==8.4.2" \
+    && pip install --no-cache-dir "pytest==9.2.0" \
     && groupadd --gid 65532 sandbox \
     && useradd --uid 65532 --gid 65532 --create-home --home-dir /home/sandbox sandbox \
     && mkdir /workspace /workspaces \

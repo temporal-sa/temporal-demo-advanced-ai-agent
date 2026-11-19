@@ -1,10 +1,10 @@
-"""P0 step 0.8 / P2 step 2.1a: run the Node harness-client contract check against our agent API.
+"""P0 step 0.8 / P2 step 2.1a: run the Node Agent Kit client contract check against our agent API.
 
     .venv/bin/python tests/contract/run_contract.py              # the real API app (default)
     .venv/bin/python tests/contract/run_contract.py --app dev    # the P0 agent dev app
 
 Starts a dev worker and the API on a fresh task queue and Redis prefix, runs
-``node harness-client/contract.mjs <base>``, tears both down and exits with node's exit code.
+``node kit-client/contract.mjs <base>``, tears both down and exits with node's exit code.
 
 ``--app real`` serves ``uvicorn simple_chat_agent.api.main:app`` with local auth (throwaway
 credentials and JWT secret, a scratch SQLite store) and the agent routes on the worker's task
@@ -12,7 +12,7 @@ queue (``CODING_AGENT_TASK_QUEUE``); the node script logs in through the local l
 and uses the session cookie. ``--app dev`` serves the dev app with its ``X-Test-User`` header.
 Needs the local Temporal dev server (TEMPORAL_TEST_ADDRESS, default 127.0.0.1:7244), Redis
 (SIMPLE_CHAT_REDIS_URL, default redis://127.0.0.1:6390/0), the sandbox executor and the keys in
-.env.local. Run ``npm ci`` in tests/contract/harness-client once first.
+.env.local. Run ``npm ci`` in tests/contract/kit-client once first.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-CLIENT_DIR = HERE / "harness-client"
+CLIENT_DIR = HERE / "kit-client"
 READY_TIMEOUT = 60.0
 
 
@@ -105,8 +105,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--app", choices=("real", "dev"), default="real")
     args = parser.parse_args()
-    if not (CLIENT_DIR / "node_modules" / "@temporalio" / "agent-harness-client").exists():
-        print("run `npm ci` in tests/contract/harness-client first", file=sys.stderr)
+    if not (CLIENT_DIR / "node_modules" / "@temporalio" / "agent-kit-client").exists():
+        print("run `npm ci` in tests/contract/kit-client first", file=sys.stderr)
         return 2
 
     env = dict(os.environ)

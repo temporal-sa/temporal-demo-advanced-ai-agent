@@ -15,6 +15,7 @@ The README's [Run it locally](../README.md#run-it-locally) starts the stack. Thi
 | `AGENT_RESEARCH_TOOLS` | API | `fetch_url` (default) or `fetch_url,search_web` |
 | `GOOGLE_SEARCH_GROUNDING_API_KEY` or `SIMPLE_CHAT_SEARXNG_BASE_URL` | worker | A backend for `search_web` |
 | `AGENT_WEB_SEARCH` | API | `off` hides the provider web search toggle |
+| `AGENT_CLOSE_AFTER_IDLE_MINUTES` | API | Minutes an idle session stays open before it closes itself (default 30; `0`: never) |
 | `CONSOLE_ENABLED` | API | The Agent Kit console is on unless this is `0`, `false`, `no` or `off` |
 | `SIMPLE_CHAT_LOCAL_AUTH_USERNAME`, `SIMPLE_CHAT_LOCAL_AUTH_PASSWORD` | API | Local login (default `demo` / `demo`) |
 | `SIMPLE_CHAT_JWT_SECRET` | API | Signs the local session cookie. `make dev-api` makes a fresh one per run if unset, so a restart signs you out. |

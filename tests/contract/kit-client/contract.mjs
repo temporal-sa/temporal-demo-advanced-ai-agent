@@ -1,11 +1,11 @@
-// P0 step 0.8 / P2 step 2.1a: the official @temporalio/agent-harness-client (0.1.0,
+// P0 step 0.8 / P2 step 2.1a: the official @temporalio/agent-kit-client (0.6.1,
 // unpatched) against our agent API routes (simple_chat_agent/api/agent_routes.py).
 //
 //     node contract.mjs http://127.0.0.1:<port>                  # dev app (X-Test-User)
 //     CONTRACT_LOGIN=user:password node contract.mjs <base>      # real app, local login
 //
 // Creates and lists the session through HttpTransport itself (startSession / listSessions,
-// the harness CreateSessionRequest shape), then drives it entirely through the client:
+// the Agent Kit CreateSessionRequest shape), then drives it entirely through the client:
 // AgentSessionCore + HttpTransport + PlainSessionState. Prints a JSON summary; exits 0 on
 // success, 1 on failure.
 
@@ -16,7 +16,7 @@ import {
   PlainSessionState,
   startSession,
   waitingCalls
-} from "@temporalio/agent-harness-client";
+} from "@temporalio/agent-kit-client";
 
 const base = (process.argv[2] ?? "").replace(/\/+$/, "");
 if (!base) {
@@ -27,7 +27,7 @@ const LOGIN = process.env.CONTRACT_LOGIN ?? "";
 // The API's CSRF gate admits a state-changing request with a same-origin Origin or this
 // custom header; Node's fetch sends no Origin, so the script identifies itself as a script
 // (a browser on our own origin passes on Origin instead).
-const SCRIPT = { "X-Requested-With": "harness-contract" };
+const SCRIPT = { "X-Requested-With": "kit-contract" };
 // Set in main(): the dev app's test header, or the real app's session cookie.
 let USER = { "X-Test-User": "alice", ...SCRIPT };
 const TIMEOUT_MS = Number(process.env.CONTRACT_TIMEOUT_MS ?? 240_000);
@@ -114,7 +114,7 @@ async function main() {
   const listed = await transport.listSessions();
   check("list_has_session", listed.some((s) => s.workflow_id === sessionId && s.label === "contract"), listed.length);
 
-  // Harness error bodies reach the client as HttpError codes.
+  // Agent Kit error bodies reach the client as HttpError codes.
   const anonymous = new HttpTransport({ baseUrl: `${base}/api/agent/` });
   await expectHttpError("unauthenticated_401", anonymous.listSessions(), 401, "unauthorized");
   await expectHttpError("unknown_session_404", transport.agentStatus("coding-agent-0000000000000000"), 404, "not_found");

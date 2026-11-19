@@ -13,26 +13,26 @@
     "e2e": "playwright test"
   },
   "dependencies": {
-    "@temporalio/agent-harness-client": "0.1.0",
-    "@temporalio/agent-harness-react": "0.1.0",
-    "highlight.js": "11.11.1",
+    "@temporalio/agent-kit-client": "0.6.1",
+    "@temporalio/agent-kit-react": "0.6.1",
+    "highlight.js": "11.12.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "react-markdown": "10.1.0",
     "remark-gfm": "4.0.1"
   },
   "devDependencies": {
-    "@axe-core/playwright": "4.13.0",
-    "@playwright/test": "1.63.0",
-    "@types/node": "22.20.4",
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.65.1",
+    "@types/node": "26.6.6",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "@vitejs/plugin-react": "6.1.1",
-    "happy-dom": "20.14.5",
-    "json-schema-to-typescript": "15.0.4",
-    "playwright-core": "1.63.0",
+    "@vitejs/plugin-react": "6.3.0",
+    "happy-dom": "21.0.4",
+    "json-schema-to-typescript": "16.0.0",
+    "playwright-core": "1.65.1",
     "typescript": "7.0.2",
-    "vite": "8.3.4",
-    "vitest": "5.0.3"
+    "vite": "8.3.8",
+    "vitest": "5.1.1"
   }
 }

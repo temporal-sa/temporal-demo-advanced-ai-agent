@@ -96,6 +96,9 @@ IDLE_WAKE = timedelta(hours=1)
 # An idle session still continues-as-new this often (P5 review M1), so no open run points
 # at claim-check payloads or history older than about a day.
 MAX_RUN_AGE = timedelta(days=1)
+# A session started without a close_after_idle (by an API that predates it, or the Temporal
+# CLI) closes after this long idle. The API passes its own setting in AgentConfig, which wins.
+DEFAULT_CLOSE_AFTER_IDLE = timedelta(minutes=30)
 # How many front-door request ids to remember for dedup, across continue-as-new.
 RECENT_REQUEST_IDS = 500
 # Stream events carried across continue-as-new (see _continue_as_new): a small tail past what
@@ -229,6 +232,9 @@ class CodingAgent:
                 data.posture, data.environment, also_allow=approvals.SUBAGENT_TOOL_NAMES
             ),
             auto_approval_criteria_default=criteria,
+            # Idle sessions close themselves (agent_closed, reason idle_timeout_expired); a turn
+            # waiting on a person is not idle. config.close_after_idle overrides it.
+            close_after_idle_default=DEFAULT_CLOSE_AFTER_IDLE,
             # Always wired, so switching to auto mode mid-session works (the harness rejects
             # an auto-mode policy without an evaluator). Judge tokens count toward this
             # session's spend caps.
@@ -391,6 +397,7 @@ class CodingAgent:
             approval_policy=self._runner.approval_policy,
             auto_approval_criteria=self._runner.auto_approval_criteria,
             agent_id=config.agent_id or kit_ext.agent_id(self._runner),
+            close_after_idle=config.close_after_idle,
         )
         next_data = data.model_copy(
             update={"carried": carried, "force_continue_as_new_after_turns": None}

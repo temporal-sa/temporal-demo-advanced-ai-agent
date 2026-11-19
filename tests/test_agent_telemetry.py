@@ -25,7 +25,9 @@ from temporalio.converter import DataConverter
 
 from simple_chat_agent.api import agent_telemetry as t
 
-FIXTURES = Path(__file__).parent / "fixtures" / "histories"
+# A recorded CodingAgent history (temporal-agent-harness 0.7.0 era), parsed for its activity
+# records only: the API's history reading doesn't depend on the build that wrote it.
+FIXTURES = Path(__file__).parent / "fixtures" / "telemetry"
 
 ANTHROPIC_RESPONSE = {
     "model_name": "claude-haiku-5-5",
@@ -58,6 +60,11 @@ class UsageTests(unittest.TestCase):
         self.assertEqual(u["cache_write_tokens"], 4470)
         self.assertEqual(u["cache_read_tokens"], 0)  # reported, and really zero
         self.assertIsNone(u["thinking_tokens"])
+
+    def test_anthropic_thinking_from_output_reasoning_tokens(self) -> None:
+        # Pydantic AI 2.71 reports Anthropic's thinking as RequestUsage.output_reasoning_tokens.
+        u = t.usage_from_response({**ANTHROPIC_RESPONSE, "usage": {**ANTHROPIC_RESPONSE["usage"], "output_reasoning_tokens": 30}})
+        self.assertEqual(u["thinking_tokens"], 30)
 
     def test_openai_has_reasoning_but_no_cache_writes(self) -> None:
         u = t.usage_from_response({
@@ -114,7 +121,7 @@ class FailureTests(unittest.TestCase):
 class HistoryParsingTests(unittest.IsolatedAsyncioTestCase):
     async def test_fixture_history_model_call_and_usage(self) -> None:
         history = WorkflowHistory.from_json(
-            "x", json.loads((FIXTURES / "interrupt_during_tool.json").read_text())
+            "x", json.loads((FIXTURES / "interrupt_during_tool_history.json").read_text())
         )
         records = t.parse_activities(list(history.events))
         models = [r for r in records if r.kind == "model"]

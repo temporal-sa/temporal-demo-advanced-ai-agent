@@ -120,9 +120,8 @@ def settings_for(choice: ModelChoice, *, session_id: str, web_search: bool = Fal
     if choice.provider == "anthropic":
         from pydantic_ai.models.anthropic import AnthropicModelSettings
 
-        # Claude 5.x requires adaptive thinking with an effort level; Pydantic AI 2.14.1's
-        # profiles predate these models, so the unified `thinking` setting would send the
-        # rejected `enabled` form.
+        # Claude 5.x requires adaptive thinking with an effort level, set here explicitly
+        # rather than through the unified `thinking` setting.
         return AnthropicModelSettings(
             max_tokens=16_000,
             # "summarized": Claude 5.x omits thinking text unless asked; the product view

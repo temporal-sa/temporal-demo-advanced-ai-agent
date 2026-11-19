@@ -9,7 +9,7 @@
 //   npx playwright test --project=mocked
 //   E2E_LIVE=1 npx playwright test --project=live
 //
-// @playwright/test is pinned at exactly 1.63.0 (Chrome Headless Shell 153).
+// @playwright/test is pinned at exactly 1.65.1 (Chrome Headless Shell 159).
 
 import { defineConfig, devices } from "@playwright/test";
 

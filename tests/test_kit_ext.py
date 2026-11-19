@@ -111,10 +111,10 @@ class HarnessInternals(unittest.TestCase):
 
 
 class PydanticAIInternals(unittest.TestCase):
-    def test_usage_extract_fix_installed_and_keeps_tokens(self) -> None:
+    def test_usage_extract_keeps_tokens_and_reasoning(self) -> None:
+        """Pydantic AI 2.71 keeps genai-prices' reasoning tokens (the fix kit_ext carried for
+        Pydantic AI 2.14 to 2.53 is gone); agent_telemetry.usage_from_response reads them."""
         from pydantic_ai.usage import RequestUsage
-
-        import simple_chat_agent.agent.kit_ext  # noqa: F401 - installs the fix
 
         usage = RequestUsage.extract(
             {
@@ -132,7 +132,10 @@ class PydanticAIInternals(unittest.TestCase):
             provider_fallback="openai",
             api_flavor="responses",
         )
-        self.assertEqual((usage.input_tokens, usage.output_tokens, usage.cache_read_tokens), (8, 6, 3))
+        self.assertEqual(
+            (usage.input_tokens, usage.output_tokens, usage.cache_read_tokens, usage.output_reasoning_tokens),
+            (8, 6, 3, 2),
+        )
 
     def test_temporal_agent_event_handler_property(self) -> None:
         from pydantic_ai.durable_exec.temporal import TemporalAgent

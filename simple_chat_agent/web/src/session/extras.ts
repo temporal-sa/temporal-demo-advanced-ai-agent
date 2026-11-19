@@ -2,7 +2,7 @@
 // so each rule is tested without React or a connection. The shapes come from
 // docs/phases/P4-ui-contract.md.
 
-import type { Message, Rejection, ToolPart } from "./types";
+import { toolOutputText, type Message, type Rejection, type ToolPart } from "./types";
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
@@ -50,7 +50,7 @@ export function nestHostCalls<P extends Message["parts"][number]>(parts: readonl
 /** A script that failed to type-check or raised comes back as tool output "Script error (...)". */
 export function scriptError(part: Pick<ToolPart, "toolName" | "output">): string | null {
   if (part.toolName !== SCRIPT_TOOL) return null;
-  const out = part.output ?? "";
+  const out = toolOutputText(part.output) ?? "";
   return out.startsWith("Script error") ? out : null;
 }
 

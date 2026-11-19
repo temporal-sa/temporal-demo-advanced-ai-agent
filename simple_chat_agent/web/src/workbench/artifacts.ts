@@ -1,6 +1,7 @@
 // Artifacts the agent created, read from create_artifact results. Pure.
 // The result text is "Created artifact <name> (artifact_id=<id>, <mime>, <n> bytes). View: …".
 
+import { toolOutputText } from "../session";
 import type { LocatedTool } from "./tree";
 
 export interface ArtifactItem {
@@ -42,7 +43,7 @@ export function artifactsOf(tools: readonly LocatedTool[]): ArtifactItem[] {
   const out: ArtifactItem[] = [];
   for (const t of tools) {
     if (t.part.toolName !== "create_artifact" || t.part.state !== "done") continue;
-    const a = parseArtifact(t.part.toolId, t.part.output);
+    const a = parseArtifact(t.part.toolId, toolOutputText(t.part.output));
     if (a) out.push(a);
   }
   return out;

@@ -127,10 +127,12 @@ def usage_from_response(response: dict[str, Any]) -> dict[str, Any]:
         thinking = details["reasoning_tokens"]
     elif "thoughts_tokens" in details:
         thinking = details["thoughts_tokens"]
+    elif u.get("output_reasoning_tokens"):
+        thinking = u["output_reasoning_tokens"]  # Pydantic AI 2.71: Anthropic, Chat Completions
     elif fam == "google":
         thinking = 0  # Gemini reports thoughts_token_count; Pydantic AI records it only when > 0
     else:
-        thinking = None  # Anthropic counts thinking inside output_tokens and doesn't split it
+        thinking = None  # not reported (or zero) and not split out of output_tokens
     return {
         "model": response.get("model_name"),
         "provider": response.get("provider_name"),

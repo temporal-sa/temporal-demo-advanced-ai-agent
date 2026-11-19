@@ -7,6 +7,7 @@ What's in it:
 - **[`temporal-agent-kit`](https://pypi.org/project/temporal-agent-kit/) 0.12.1** for the agent loop: turns, tools, approvals, events, subagents, Code Mode and browser callbacks. The few gaps it has (interrupt, continue-as-new, heartbeats) are filled in one module, [`agent/kit_ext.py`](simple_chat_agent/agent/kit_ext.py).
 - **[Pydantic AI's Temporal integration](https://ai.pydantic.dev/durable_execution/temporal/)** with Anthropic, OpenAI and Gemini. You can switch provider between turns and keep the history.
 - **A sandboxed workspace.** The agent reads, searches and edits code, runs commands and tests, and commits locally, inside a Bubblewrap sandbox with no credentials.
+- **Idle close.** A session that sits idle for 30 minutes (`AGENT_CLOSE_AFTER_IDLE_MINUTES`) closes itself, with Agent Kit's `close_after_idle`; its transcript stays readable.
 - **Approvals** with four postures, including an auto mode where a judge approves routine calls and sends the rest to you. The judge sees this session's past approve/decline decisions on each tool, so it doesn't keep escalating the same shape of call. The gate fails closed.
 - **Durability you can see.** A worker crash shows what Temporal kept and what it repeated. Messages and approvals sent while no worker is running land in Temporal as [Signals](https://docs.temporal.io/sending-messages#sending-signals) and apply when a worker returns.
 - **[Worker Versioning](https://docs.temporal.io/production-deployment/worker-deployments/worker-versioning)** with PINNED workflows, and [continue-as-new](https://docs.temporal.io/workflow-execution/continue-as-new) for long sessions.
@@ -42,8 +43,8 @@ When a worker dies mid-turn, the model call's heartbeat stops, Temporal retries 
 
 ## Prerequisites
 
-- Python 3.12 and [uv](https://docs.astral.sh/uv/)
-- Node 22 (for the web app)
+- Python 3.14 and [uv](https://docs.astral.sh/uv/)
+- Node 26 (for the web app)
 - Docker Desktop (for the sandbox executor)
 - The [Temporal CLI](https://docs.temporal.io/cli)
 - `redis-server`
@@ -77,6 +78,8 @@ Then start each piece in its own terminal:
 | `make gen` | Regenerates the web app's types from the agents' schemas |
 
 Tests: `.venv/bin/python -m unittest discover -s tests` for Python (Redis on 6390; some suites also want the dev server on 7244), and `npm test` and `npm run typecheck` in `simple_chat_agent/web`.
+
+The replay test (`tests/test_replay.py`) replays recorded `CodingAgent` histories from `tests/fixtures/histories/` on the current build. None are recorded for this build yet, so it skips. Record them whenever workflow code changes, with provider keys in `.env.local`, the dev stack and the executor running: `RUN_INTEGRATION=1 .venv/bin/python -m tests.integration.record_histories`.
 
 ## Demo script (7 minutes)
 
@@ -126,6 +129,6 @@ About 70% of the input is read from the provider's cache, which providers bill a
 
 ## Notes
 
-- Agent Kit is pre-1.0 and pinned at 0.12.1, with Pydantic AI at 2.53.0. `kit_ext.py` uses a few of their private internals; `tests/test_kit_ext.py` fails if they move.
+- Agent Kit is pre-1.0 and pinned at 0.12.1, with Pydantic AI at 2.71.0. `kit_ext.py` uses a few of their private internals; `tests/test_kit_ext.py` fails if they move.
 - MCP servers are local only. In the catalog, MCP is off and the judge can approve only reads and file edits. "Never ask" is available everywhere: every tool call runs without asking.
 - There is no patching. Workers are versioned and workflows are PINNED; a code change ships as a new Worker Deployment Version.

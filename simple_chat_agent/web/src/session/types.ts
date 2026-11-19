@@ -30,7 +30,7 @@ import type {
   AgentView,
   ConnectionStatus,
   Evaluation,
-  HarnessMessage,
+  KitMessage,
   MessagePart,
   ModelInteractionPart,
   ReplyDeltaPart,
@@ -39,12 +39,21 @@ import type {
   ToolPart,
   ToolState,
   WaitingToolCall,
-} from "@temporalio/agent-harness-react";
+} from "@temporalio/agent-kit-react";
 
 // -- re-exported harness shapes (read-only views of the stream) ---------------------------
 
+/** A tool part's output as the text the UI parses. The agent publishes every tool result as
+ *  its model-facing text (kit_ext._install_tool_output_text), and the Agent Kit client types
+ *  `tool_end.tool_output` as any JSON value; anything that isn't a string (a tool with no
+ *  result is null) is shown as JSON. */
+export function toolOutputText(output: ToolPart["output"] | undefined): string | null {
+  if (output === null || output === undefined) return null;
+  return typeof output === "string" ? output : JSON.stringify(output, null, 2);
+}
+
 /** One inbound message to an agent and everything it produced, in stream order. */
-export type Message = HarnessMessage;
+export type Message = KitMessage;
 export type {
   Evaluation,
   MessagePart,
@@ -361,6 +370,9 @@ export interface SessionTelemetry {
   rejections: Rejection[];
   /** Frame types we don't know, by count. Ignored otherwise. */
   unknownFrames: Record<string, number>;
+  /** Why the agent closed (`agent_closed`): "requested" or "idle_timeout_expired". Null while
+   *  it is open, or when the stream hasn't carried the event. */
+  closeReason: string | null;
 }
 
 // -- callbacks (P4, A12) --------------------------------------------------------------------

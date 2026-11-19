@@ -56,7 +56,7 @@ from pydantic_ai.messages import (
     ModelResponse,
     NativeToolCallPart,
     NativeToolReturnPart,
-    RetryPromptPart,
+    RetryFeedbackPart,
     SystemPromptPart,
     TextContent,
     TextPart,
@@ -258,9 +258,9 @@ def _part_cost(part: Any) -> tuple[int, int]:
         chars, media = _content_cost(part.content)
         name = getattr(part, "tool_name", "") or ""
         return chars + len(name) + _PART_OVERHEAD_CHARS, media
-    if isinstance(part, RetryPromptPart):
+    if isinstance(part, RetryFeedbackPart):
         content = part.content if isinstance(part.content, str) else _json(part.content)
-        return len(content) + len(part.tool_name or "") + _PART_OVERHEAD_CHARS, 0
+        return len(content) + _PART_OVERHEAD_CHARS, 0
     if isinstance(part, BaseToolCallPart):
         args = part.args if isinstance(part.args, str) else _json(part.args or {})
         return len(args) + len(part.tool_name) + _PART_OVERHEAD_CHARS, 0
@@ -339,9 +339,9 @@ def _call_ids(response: ModelResponse) -> set[str]:
 
 
 def _is_return(part: Any) -> bool:
-    return isinstance(part, ToolReturnPart) or (
-        isinstance(part, RetryPromptPart) and part.tool_name is not None
-    )
+    # A tool call's retry answers it as a ToolReturnPart with outcome="retried" (Pydantic AI
+    # 2.60+; the old RetryPromptPart is no longer built). RetryFeedbackPart answers no call.
+    return isinstance(part, ToolReturnPart)
 
 
 def _return_ids(requests: Sequence[ModelMessage]) -> set[str]:
@@ -777,9 +777,12 @@ class ContextFit(AbstractCapability[Any]):
     budget: ContextBudget
 
     async def before_model_request(self, ctx: Any, request_context: Any) -> Any:
-        request_context.messages = fit_with(
-            request_context.messages, self.request_budget(request_context)
-        )
+        fitted = fit_with(request_context.messages, self.request_budget(request_context))
+        request_context.messages = fitted.copy()
+        # In Pydantic AI 2.71, replacing request_context.messages changes only this request;
+        # the run's history is ctx.messages (upstream ProcessHistory does the same). Write the
+        # fitted history there too, so the agent keeps the compacted history, not the full one.
+        ctx.messages[:] = fitted
         return request_context
 
     def request_budget(self, request_context: Any) -> ContextBudget:

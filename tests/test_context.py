@@ -19,7 +19,6 @@ from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
     ModelResponse,
-    RetryPromptPart,
     SystemPromptPart,
     TextPart,
     ThinkingPart,
@@ -87,7 +86,7 @@ def returns_for(rng: random.Random, resp: ModelResponse, *, max_chars: int) -> M
     for p in resp.parts:
         if isinstance(p, ToolCallPart):
             if rng.random() < 0.1:
-                parts.append(RetryPromptPart("bad args", tool_name=p.tool_name, tool_call_id=p.tool_call_id, timestamp=T0))
+                parts.append(ToolReturnPart(p.tool_name, "bad args", tool_call_id=p.tool_call_id, timestamp=T0, outcome="retried"))
             else:
                 size = rng.randint(10, max_chars)
                 parts.append(ToolReturnPart(p.tool_name, "x" * size, tool_call_id=p.tool_call_id, timestamp=T0))
@@ -128,7 +127,7 @@ def return_ids(m: ModelMessage) -> set[str]:
     return {
         p.tool_call_id
         for p in m.parts
-        if isinstance(p, ToolReturnPart) or (isinstance(p, RetryPromptPart) and p.tool_name)
+        if isinstance(p, ToolReturnPart)
     }
 
 
@@ -470,14 +469,14 @@ class BudgetHelperTests(unittest.TestCase):
 
 
 def _anthropic_error(status: int, body: dict) -> ModelHTTPError:
-    from pydantic_ai.models.anthropic import _map_api_errors
+    from pydantic_ai.models.anthropic._errors import map_api_errors
 
     request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
     response = httpx.Response(status, request=request, json=body)
     cls = anthropic.BadRequestError if status == 400 else anthropic.APIStatusError
     sdk_error = cls(f"Error code: {status} - {body}", response=response, body=body)
     try:
-        with _map_api_errors("claude-sonnet-5-5"):
+        with map_api_errors("claude-sonnet-5-5"):
             raise sdk_error
     except ModelHTTPError as exc:
         return exc
@@ -485,7 +484,7 @@ def _anthropic_error(status: int, body: dict) -> ModelHTTPError:
 
 
 def _openai_error(status: int, body: dict) -> ModelHTTPError:
-    from pydantic_ai.models.openai import _map_api_errors
+    from pydantic_ai.models.openai._errors import map_api_errors
 
     client = openai.AsyncOpenAI(api_key="test", max_retries=0)
     import httpx2  # openai 3.x is built on httpx2
@@ -494,7 +493,7 @@ def _openai_error(status: int, body: dict) -> ModelHTTPError:
     response = httpx2.Response(status, request=request, json=body)
     sdk_error = client._make_status_error(f"Error code: {status}", body=body, response=response)
     try:
-        with _map_api_errors("gpt-5.5"):
+        with map_api_errors("gpt-5.5"):
             raise sdk_error
     except ModelHTTPError as exc:
         return exc
