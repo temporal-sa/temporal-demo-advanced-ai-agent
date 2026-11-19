@@ -1,7 +1,7 @@
 // The Changes tab's model: each changed file with the diffs the agent's edits produced, and
 // the workspace facts (branch, last command, exit). Pure.
 
-import type { ChangesState, WorkspaceState } from "../session";
+import { toolOutputText, type ChangesState, type WorkspaceState } from "../session";
 import { addedFilePreview, countLines, diffFromEditOutput, type DiffLine } from "./diff";
 import { strArg, type LocatedTool } from "./tree";
 
@@ -35,10 +35,10 @@ export function fileChanges(changes: ChangesState | null, tools: readonly Locate
     const entry = byPath.get(path);
     if (!entry) continue;
     if (p.toolName === "edit_file") {
-      const d = diffFromEditOutput(p.output);
+      const d = diffFromEditOutput(toolOutputText(p.output));
       if (d && d.lines.length) entry.hunks.push({ toolId: p.toolId, lines: d.lines, truncated: d.truncated });
       else entry.unshown++;
-    } else if (/^Created /.test(p.output ?? "")) {
+    } else if (/^Created /.test(toolOutputText(p.output) ?? "")) {
       entry.hunks.push({ toolId: p.toolId, lines: addedFilePreview(strArg(p.input, "content"), 400), truncated: false });
     } else {
       entry.unshown++;
@@ -72,7 +72,7 @@ export function branchFrom(tools: readonly LocatedTool[]): string | null {
   let branch: string | null = null;
   for (const t of tools) {
     if (t.part.toolName !== "git_status" || t.part.state !== "done") continue;
-    const m = /^On branch ([^\s;]+)/.exec(t.part.output ?? "");
+    const m = /^On branch ([^\s;]+)/.exec(toolOutputText(t.part.output) ?? "");
     if (m) branch = m[1] ?? null;
   }
   return branch;

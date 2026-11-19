@@ -3,7 +3,7 @@
 // it runs, and the full output (with copy and the S7 log lookup) when opened.
 
 import { useEffect, useRef, useState } from "react";
-import { ApiError, type ToolPart } from "../session";
+import { ApiError, toolOutputText, type ToolPart } from "../session";
 import { DiffView, JudgeCards } from "../app/slots";
 import { useTranscript } from "./context";
 import { ErrorNote } from "./ErrorNote";
@@ -28,7 +28,7 @@ const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2,
 
 function StateBadge({ part, elapsed }: { part: ToolPart; elapsed: number | null }) {
   const { workerAnswering, session } = useTranscript();
-  const cmd = part.toolName === "run_command" ? commandSummary(part.output) : null;
+  const cmd = part.toolName === "run_command" ? commandSummary(toolOutputText(part.output)) : null;
   switch (part.state) {
     case "awaiting_approval":
     case "evaluating": {
@@ -77,8 +77,8 @@ function OutputPanel({ part }: { part: ToolPart }) {
   const { session } = useTranscript();
   const [copied, setCopied] = useState(false);
   const [log, setLog] = useState<{ text: string; state: "idle" | "loading" | "done" | "error"; note?: string }>({ text: "", state: "idle" });
-  const logRef = part.toolName === "run_command" ? commandSummary(part.output)?.logRef ?? null : null;
-  const text = log.state === "done" ? log.text : part.output ?? part.error ?? "";
+  const logRef = part.toolName === "run_command" ? commandSummary(toolOutputText(part.output))?.logRef ?? null : null;
+  const text = log.state === "done" ? log.text : toolOutputText(part.output) ?? part.error ?? "";
 
   async function copy() {
     try {

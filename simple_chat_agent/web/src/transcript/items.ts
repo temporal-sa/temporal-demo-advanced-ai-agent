@@ -11,7 +11,7 @@
 //   subagents asked at once sit side by side.
 // * After Stop, the reply text that followed the last tool call is folded as "Discarded".
 
-import type { Message, ModelInteractionPart, SubagentPart, ToolPart, TurnRecovery } from "../session";
+import { toolOutputText, type Message, type ModelInteractionPart, type SubagentPart, type ToolPart, type TurnRecovery } from "../session";
 import { nestHostCalls } from "../session/extras";
 import { GROUPABLE, SUBAGENT_TOOLS, wordCount } from "./toolInfo";
 
@@ -172,7 +172,7 @@ export function lostToolId(
   }
   // A command that kept running and was reattached says so in its result.
   if (tools.some((r) => r.kind === "command_reattached")) {
-    const reattached = candidates.filter((p) => / · reattached\b/.test(p.output ?? ""));
+    const reattached = candidates.filter((p) => / · reattached\b/.test(toolOutputText(p.output) ?? ""));
     if (reattached.length > 0) return reattached[reattached.length - 1]!.toolId;
   }
   return candidates.length === 1 ? candidates[0]!.toolId : null;

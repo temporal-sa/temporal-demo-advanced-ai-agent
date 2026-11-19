@@ -1,6 +1,6 @@
 """The harness client's HTTP contract, served by our API (PRD S1, S2, S6, S7, S8).
 
-``@temporalio/agent-harness-client``'s ``HttpTransport`` calls these routes relative to its
+``@temporalio/agent-kit-client``'s ``HttpTransport`` calls these routes relative to its
 ``baseUrl`` (``/api/agent/`` on the real app). Differences from the packaged harness app, all
 deliberate:
 
