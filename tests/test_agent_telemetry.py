@@ -521,7 +521,7 @@ class _CapturingRunner:
         self.events: list[Any] = []
 
     def _pub(self, turn_id: str, turn_number: int, event: Any, *, message_id: Any = None) -> None:
-        from temporal_agent_harness.harness.agent_protocol import AgentEvent
+        from temporal_agent_kit.agent_protocol import AgentEvent
 
         self.events.append(AgentEvent(agent_id=self.agent_id, turn_id=turn_id, turn_number=turn_number,
                                       message_id=message_id, timestamp=time.time(), event=event))
@@ -530,10 +530,10 @@ class _CapturingRunner:
 def rejection_events(kind: str, request_id: str, *, exc: Any, tool_id: str | None = None,
                      agent_id: str = "root", message_text: str | None = None) -> list[Any]:
     """The AgentEvents the workflow publishes for one rejected front-door Signal."""
-    from simple_chat_agent.agent import harness_ext
+    from simple_chat_agent.agent import kit_ext
 
     runner = _CapturingRunner(agent_id)
-    harness_ext.publish_rejection(runner, kind=kind, request_id=request_id, exc=exc,  # type: ignore[arg-type]
+    kit_ext.publish_rejection(runner, kind=kind, request_id=request_id, exc=exc,  # type: ignore[arg-type]
                                   tool_id=tool_id, message_text=message_text)
     return runner.events
 
@@ -552,9 +552,9 @@ class RejectionTests(unittest.TestCase):
         return [sse_data(e) for e in events]
 
     def test_prefix_matches_the_workflow_side(self) -> None:
-        from simple_chat_agent.agent import harness_ext
+        from simple_chat_agent.agent import kit_ext
 
-        self.assertEqual(t.REJECTION_MESSAGE_PREFIX, harness_ext.REJECTION_MESSAGE_PREFIX)
+        self.assertEqual(t.REJECTION_MESSAGE_PREFIX, kit_ext.REJECTION_MESSAGE_PREFIX)
 
     def test_approval_rejection_becomes_one_x_rejected_frame(self) -> None:
         frames = self.frames(rejection_events("approval", "req-1", exc=already_resolved(), tool_id="tool-9"))

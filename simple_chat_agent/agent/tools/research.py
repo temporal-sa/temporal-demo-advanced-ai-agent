@@ -32,7 +32,7 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 from pydantic import BaseModel, Field
-from temporal_agent_harness.harness import agent
+from temporal_agent_kit import agent
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ApplicationError
 from temporalio.workflow import ActivityConfig
@@ -516,7 +516,7 @@ async def _get_json(url: str, params: dict[str, Any]) -> dict[str, Any]:
                 params=clean,
                 headers={
                     "Accept": "application/json",
-                    "User-Agent": "temporal-agent-harness-example/0.1",
+                    "User-Agent": "temporal-agent-kit-example/0.1",
                 },
             )
     except httpx.TimeoutException:

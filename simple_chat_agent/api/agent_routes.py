@@ -57,13 +57,13 @@ from temporalio.common import (
 from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.service import RPCError, RPCStatusCode
 
-from temporal_agent_harness.harness.agent_protocol import (
+from temporal_agent_kit.agent_protocol import (
     TOOL_APPROVAL_UPDATE,
     AgentConfig,
     MidTurn,
     ToolApprovalDecision,
 )
-from temporal_agent_harness.harness.agent_protocol.agent_interface import AcceptedFunction
+from temporal_agent_kit.agent_protocol.agent_interface import AcceptedFunction
 
 from simple_chat_agent.agent import approvals
 from simple_chat_agent.agent.approvals import DEFAULT_JUDGE_MODEL, JUDGE_MODEL_ENV, configured_judge_backend
@@ -274,13 +274,13 @@ def console_link_status() -> tuple[bool, str | None]:
     from simple_chat_agent.api import console
 
     if not console.console_enabled():
-        return False, "The harness console is switched off."
+        return False, "The Agent Kit console is switched off."
     try:
         installed = console.console_dist() is not None
     except Exception:  # noqa: BLE001 - a missing optional UI must not break config
         installed = False
     if not installed:
-        return False, "The harness console isn't installed on this server."
+        return False, "The Agent Kit console isn't installed on this server."
     return True, None
 
 
@@ -319,14 +319,14 @@ async def connect_agent_client() -> Client:
     ``simple_chat_agent.api.main``), with the agent plugins and the worker's payload storage
     instead of the old app's data converter."""
     from pydantic_ai.durable_exec.temporal import PydanticAIPlugin
-    from temporal_agent_harness.plugin import AgentHarnessPlugin
+    from temporal_agent_kit.plugin import AgentKitPlugin
 
-    from simple_chat_agent.agent.harness_ext import payload_storage
+    from simple_chat_agent.agent.kit_ext import payload_storage
 
     kwargs: dict[str, Any] = {
         "namespace": os.environ.get("TEMPORAL_NAMESPACE", "default"),
         "tls": os.environ.get("TEMPORAL_TLS", "false").lower() in ("true", "1"),
-        "plugins": [PydanticAIPlugin(), AgentHarnessPlugin(large_payload_offload=payload_storage())],
+        "plugins": [PydanticAIPlugin(), AgentKitPlugin(large_payload_offload=payload_storage())],
     }
     if os.environ.get("TEMPORAL_API_KEY"):
         kwargs["api_key"] = os.environ["TEMPORAL_API_KEY"]

@@ -1,16 +1,16 @@
 # Advanced AI Agent
 
-A coding agent built on the official Temporal Agent Harness. It fixes a bug in a real repo, survives a worker crash in the middle of the test run, and waits for a human to approve the commit.
+A coding agent built on the official Temporal Agent Kit. It fixes a bug in a real repo, survives a worker crash in the middle of the test run, and waits for a human to approve the commit.
 
 What's in it:
 
-- **[`temporal-agent-harness`](https://pypi.org/project/temporal-agent-harness/) 0.7.0** for the agent loop: turns, tools, approvals, events, subagents, Code Mode and browser callbacks. The few gaps it has (interrupt, continue-as-new, heartbeats) are filled in one module, [`agent/harness_ext.py`](simple_chat_agent/agent/harness_ext.py).
+- **[`temporal-agent-kit`](https://pypi.org/project/temporal-agent-kit/) 0.12.1** for the agent loop: turns, tools, approvals, events, subagents, Code Mode and browser callbacks. The few gaps it has (interrupt, continue-as-new, heartbeats) are filled in one module, [`agent/kit_ext.py`](simple_chat_agent/agent/kit_ext.py).
 - **[Pydantic AI's Temporal integration](https://ai.pydantic.dev/durable_execution/temporal/)** with Anthropic, OpenAI and Gemini. You can switch provider between turns and keep the history.
 - **A sandboxed workspace.** The agent reads, searches and edits code, runs commands and tests, and commits locally, inside a Bubblewrap sandbox with no credentials.
 - **Approvals** with four postures, including an auto mode where a judge approves routine calls and sends the rest to you. The judge sees this session's past approve/decline decisions on each tool, so it doesn't keep escalating the same shape of call. The gate fails closed.
 - **Durability you can see.** A worker crash shows what Temporal kept and what it repeated. Messages and approvals sent while no worker is running land in Temporal as [Signals](https://docs.temporal.io/sending-messages#sending-signals) and apply when a worker returns.
 - **[Worker Versioning](https://docs.temporal.io/production-deployment/worker-deployments/worker-versioning)** with PINNED workflows, and [continue-as-new](https://docs.temporal.io/workflow-execution/continue-as-new) for long sessions.
-- A product view in the buildkit design language, the harness console one click away, and Temporal UI links on every session.
+- A product view in the buildkit design language, the Agent Kit console one click away, and Temporal UI links on every session.
 - Extras: MCP servers (local only), Code Mode scripts, `ask_user` and `pick_files` cards, and provider web search with a sources list.
 
 ## How it works
@@ -31,7 +31,7 @@ flowchart LR
 | Component | What it does | When it's down |
 |---|---|---|
 | Worker (`CodingSessions`, `CodingAgent`, `TaskAgent`) | Runs each session as a workflow. Model calls and workspace tools are activities. | The UI keeps working from Redis. New messages and approvals wait in Temporal. A banner says the worker isn't answering. |
-| API | Auth, the harness transport routes, the Signal front door, the bridge that copies agent events into Redis, uploads and the console | The UI is unavailable; workflows carry on. |
+| API | Auth, the Agent Kit transport routes, the Signal front door, the bridge that copies agent events into Redis, uploads and the console | The UI is unavailable; workflows carry on. |
 | Redis (AOF) | The session's event log, status, leases and spend counters | Attach falls back to Temporal. New turns stop (spend checks fail closed). |
 | Executor | Runs commands and file operations in a per-session workspace | Tools retry; the Terminal says the sandbox isn't answering. |
 | Temporal | Durable state, the event stream, versioning | Everything waits. |
@@ -90,7 +90,7 @@ One session, from **New demo session**. The seed is a small Python service with 
 | 2:40 | `make crash-worker` during the test run, then `make dev-worker`. | A yellow banner. In Temporal UI, the pending activity. Then a recovery divider ("Worker lost at …. Kept: … Repeated: …") and the tests go green. |
 | 4:10 | | `git_commit` goes to you, not the judge. Reload the page: the card is still there. Approve. |
 | 4:50 | Switch the model to GPT. Send: "Review the diff." | A review subagent returns a structured review. |
-| 5:40 | Click **Harness console**. | The same session as the harness records it: the raw loop. |
+| 5:40 | Click **Agent Kit console**. | The same session as Agent Kit records it: the raw loop. |
 | 6:30 | | Close on the meters: tokens in and out, the share read from the provider cache, recoveries, and the work kept after the worker loss. |
 
 ### Extras (local)
@@ -122,10 +122,10 @@ About 70% of the input is read from the provider's cache, which providers bill a
 - [docs/CUTOVER.md](docs/CUTOVER.md): moving the catalog from the old chat app.
 - [docs/SECURITY-CHECKLIST.md](docs/SECURITY-CHECKLIST.md): each safety rule and the test that proves it.
 - [docs/local-development.md](docs/local-development.md): environment variables and troubleshooting.
-- [`basic_file_agent/`](basic_file_agent/README.md): a minimal agent on the same harness, about 150 lines.
+- [`basic_file_agent/`](basic_file_agent/README.md): a minimal agent on the same kit, about 150 lines.
 
 ## Notes
 
-- The harness is pre-1.0 and pinned at 0.7.0. `harness_ext.py` uses a few of its private internals; `tests/test_harness_ext.py` fails if they move.
+- Agent Kit is pre-1.0 and pinned at 0.12.1, with Pydantic AI at 2.53.0. `kit_ext.py` uses a few of their private internals; `tests/test_kit_ext.py` fails if they move.
 - MCP servers are local only. In the catalog, MCP is off and the judge can approve only reads and file edits. "Never ask" is available everywhere: every tool call runs without asking.
 - There is no patching. Workers are versioned and workflows are PINNED; a code change ships as a new Worker Deployment Version.

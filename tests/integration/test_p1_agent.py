@@ -100,7 +100,7 @@ class P1AgentTests(unittest.IsolatedAsyncioTestCase):
                 reply = chat_replies(events.collected)[-1]["text"].lower()
                 self.assertIn("apple", reply)
                 self.assertIn("banana", reply)
-                from temporal_agent_harness.harness.agent_client import AgentClient
+                from temporal_agent_kit.agent_client import AgentClient
 
                 status = await AgentClient(self.client, handle.id).get_status()
                 self.assertEqual(status.subagents, [])
@@ -135,7 +135,7 @@ class P1AgentTests(unittest.IsolatedAsyncioTestCase):
         """A general subagent runs under its parent's approval policy: under trust_safe its
         gated call asks, the answer goes to the child's own tool_approval Update, and the
         approved call runs once."""
-        from temporal_agent_harness.harness.agent_protocol import TOOL_APPROVAL_UPDATE, ToolApprovalDecision
+        from temporal_agent_kit.agent_protocol import TOOL_APPROVAL_UPDATE, ToolApprovalDecision
 
         async with support.running_worker(self.client, self.task_queue):
             handle = await support.start_session(
@@ -181,7 +181,7 @@ class P1AgentTests(unittest.IsolatedAsyncioTestCase):
     async def test_p3_forget_always_allowed_survives_continue_as_new(self) -> None:
         """P3: forget_always_allowed clears "always allow" (here edit_file, given at start as a
         remembered approval would), says what it forgot, and stays forgotten in the next run."""
-        from temporal_agent_harness.harness.agent_protocol import AgentConfig
+        from temporal_agent_kit.agent_protocol import AgentConfig
 
         from simple_chat_agent.agent import approvals
         from simple_chat_agent.agent.contracts import AGENT_WORKFLOW_TYPE, CodingAgentInit

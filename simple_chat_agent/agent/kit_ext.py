@@ -1,9 +1,9 @@
-"""Gap-fillers for temporal-agent-harness 0.7.0 and Pydantic AI 2.14.1.
+"""Gap-fillers for temporal-agent-kit 0.12.1 and Pydantic AI 2.53.0.
 
-Every use of a private harness or Pydantic AI internal lives in this module, with the 0.7.0
-source location it depends on, so a harness upgrade has one file to re-check
+Every use of a private Agent Kit or Pydantic AI internal lives in this module, with the source
+location it depends on, so a kit upgrade has one file to re-check
 (CTO memo 001, "Private harness internals we'd depend on"). Contract tests in
-tests/test_harness_ext.py pin the shapes these helpers rely on.
+tests/test_kit_ext.py pin the shapes these helpers rely on.
 """
 
 from __future__ import annotations
@@ -42,13 +42,13 @@ from temporalio import activity, workflow
 from temporalio.contrib.workflow_streams import PollInput, PollResult, WorkflowStream
 from temporalio.exceptions import ApplicationError
 
-from temporal_agent_harness.ai_sdks.pydantic_ai_harness import (
+from temporal_agent_kit.ai_sdks.pydantic_ai import (
     PydanticAIStreamObserver,
     _resolve_stream_context,
     _runner_from_ctx,
     _tool_schema,
 )
-from temporal_agent_harness.harness.agent_protocol import (
+from temporal_agent_kit.agent_protocol import (
     PROVIDE_CALLBACK_RESULT_UPDATE,
     SEND_AGENT_MESSAGE_UPDATE,
     TOOL_APPROVAL_UPDATE,
@@ -59,20 +59,21 @@ from temporal_agent_harness.harness.agent_protocol import (
     ModelInteractionStarted,
     ToolApprovalDecision,
 )
-from temporal_agent_harness.harness.agent_workflow import (
+from temporal_agent_kit.agent_workflow import (
     AgentWorkflowRunner,
     _current_runner,
     _current_tool_id,
     tool_defn,
 )
 # Code Mode internals (limited_code_mode_tool). Imported here, at module scope: this module is
-# passed through the workflow sandbox, so these are the same classes the harness checks against.
-from temporal_agent_harness.harness.code_mode import tool as cm
-from temporal_agent_harness.harness.code_mode.driver import CodeModeDriver, load_stepper
-from temporal_agent_harness.harness.code_mode.stubs import render_host_interface, render_type_check_stubs
-from temporal_agent_harness.harness.code_mode.vfs import FileOp, validate_mounts
+# passed through the workflow sandbox, so these are the same classes the kit checks against.
+from temporal_agent_kit.code_mode import tool as cm
+from temporal_agent_kit.code_mode._texts import CONTRACT, FILESYSTEM_STUB, NO_FILESYSTEM, WITH_FILESYSTEM
+from temporal_agent_kit.code_mode.driver import CodeModeDriver, load_stepper
+from temporal_agent_kit.code_mode.stubs import render_host_interface, render_type_check_stubs
+from temporal_agent_kit.code_mode.vfs import FileOp, validate_mounts
 
-# Model deltas are flushed to the workflow as one Signal per batch. The harness default is
+# Model deltas are flushed to the workflow as one Signal per batch. The kit default is
 # 50 ms; 500 ms keeps a long coding turn inside Temporal's per-run limits (PRD A20, CTO-5).
 STREAM_BATCH_INTERVAL = timedelta(
     milliseconds=int(os.environ.get("AGENT_STREAM_BATCH_MS", "500"))
@@ -87,17 +88,18 @@ _RETRYABLE_4XX = frozenset({408, 409, 429})
 
 
 # ---------------------------------------------------------------------------
-# Usage extraction fix (Pydantic AI 2.14.1 + genai-prices >= 0.1.10)
+# Usage extraction fix (Pydantic AI 2.53.0 + genai-prices >= 0.1.10)
 # ---------------------------------------------------------------------------
 
 
 def _install_usage_extract_fix() -> None:
-    """Keep token usage when genai-prices returns fields RequestUsage doesn't know.
+    """Keep reasoning tokens that genai-prices returns in a field RequestUsage doesn't know.
 
-    ``RequestUsage.extract`` builds ``cls(**usage.__dict__)`` and swallows any error, so the
-    ``output_reasoning_tokens`` field genai-prices now returns makes every OpenAI and Gemini
-    usage come back as zero (pydantic_ai/usage.py, ``RequestUsage.extract``). This wrapper
-    keeps the known fields and moves reasoning tokens into ``details``. Filed upstream.
+    genai-prices reports ``output_reasoning_tokens``, which ``RequestUsage`` has no field for.
+    Pydantic AI 2.14.1 failed on it and returned zero usage; 2.53.0 keeps the token counts but
+    drops the reasoning tokens (pydantic_ai/usage.py, ``RequestUsage.extract``). This wrapper
+    keeps the known fields and moves reasoning tokens into ``details``, where the observer reads
+    them as ``thought_tokens``. Filed upstream.
     """
     import dataclasses
 
@@ -130,6 +132,38 @@ def _install_usage_extract_fix() -> None:
 
 
 _install_usage_extract_fix()
+
+
+# ---------------------------------------------------------------------------
+# tool_end carries the model-facing text
+# ---------------------------------------------------------------------------
+
+
+def _install_tool_output_text() -> None:
+    """Publish ``tool_end.tool_output`` as ``str(result)``, as 0.7.0 did.
+
+    Since 0.8 the kit publishes a tool's result as JSON (agent_workflow.py,
+    ``_tool_output_json``, called by ``tool_defn`` and ``activity_tool_defn``), so a tool
+    returning a :class:`ToolResult` would publish its fields instead of the compact text its
+    ``__str__`` writes for the model. The product view parses that text (diffs, command
+    summaries, artifacts, the branch), and every transcript already stored in Redis holds it,
+    so this keeps the text. A string is valid protocol JSON, so kit readers (the console)
+    still read it. The function is looked up at call time, so replacing the module attribute
+    covers both call sites, in workflow code and in activities.
+    """
+    from temporal_agent_kit import agent_workflow
+
+    if getattr(agent_workflow._tool_output_json, "__coding_agent_fix__", False):
+        return
+
+    def tool_output_text(tool_name: str, result: Any) -> str:
+        return str(result)
+
+    tool_output_text.__coding_agent_fix__ = True  # type: ignore[attr-defined]
+    agent_workflow._tool_output_json = tool_output_text  # type: ignore[attr-defined]
+
+
+_install_tool_output_text()
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +214,7 @@ class HeartbeatingModel(WrapperModel):
                         yield response
                     finally:
                         if guard is not None:
-                            usage = stream_usage(response)
+                            usage = response.usage
                             await guard.record(
                                 session_id,
                                 owner_id,
@@ -252,10 +286,10 @@ async def _heartbeating() -> AsyncIterator[None]:
 
 
 class BatchedStreamObserver(PydanticAIStreamObserver):
-    """The harness's Pydantic AI observer, publishing on our batch interval.
+    """The kit's Pydantic AI observer, publishing on our batch interval.
 
-    0.7.0's observer opens its publisher with the 50 ms default and offers no knob
-    (pydantic_ai_harness.py, PydanticAIStreamObserver.__aenter__). We reimplement __aenter__
+    The observer opens its publisher with the 50 ms default and offers no knob
+    (ai_sdks/pydantic_ai.py, PydanticAIStreamObserver.__aenter__). We reimplement __aenter__
     only; it touches the private ``_stack``, ``_publisher``, ``_context`` and ``_model``.
     Native (provider-hosted) tool calls are skipped: they never get tool_start/tool_end, so a
     tool_requested for them would leave a dangling row in the client projection.
@@ -280,7 +314,10 @@ class BatchedStreamObserver(PydanticAIStreamObserver):
 async def coding_event_stream_handler(
     ctx: RunContext[Any], stream: AsyncIterable[AgentStreamEvent]
 ) -> None:
-    """Our event_stream_handler: harness_event_stream_handler with BatchedStreamObserver."""
+    """Our event_stream_handler: opens a BatchedStreamObserver per streamed model call and feeds
+    it every event, as 0.7.0's harness handler did. (0.12.1's kit_event_stream_handler instead
+    reads an observer that its TemporalAgentKitDurability capability opens; this agent still
+    runs on TemporalAgent, so it opens its own.)"""
     context = _resolve_stream_context(ctx)
     if context is None or not isinstance(stream, StreamedResponse):
         async for _ in stream:
@@ -290,18 +327,7 @@ async def coding_event_stream_handler(
     async with BatchedStreamObserver(context, model=model) as obs:
         async for event in stream:
             await obs.on_event(event)
-        obs.set_usage(stream_usage(stream))
-
-
-def stream_usage(stream: StreamedResponse) -> Any:
-    """A stream's usage, whether ``usage`` is a method or a property.
-
-    The 0.7.0 harness handler calls ``stream.usage()``; in Pydantic AI 2.14.1 ``usage`` is a
-    property on provider streams, so the harness's call raises and is swallowed, and every
-    ``model_interaction_ended`` goes out with ``usage=None``. (Filed upstream.)
-    """
-    usage = stream.usage
-    return usage() if callable(usage) else usage
+        obs.set_usage(stream.usage)
 
 
 async def _drain(_ctx: RunContext[Any], stream: AsyncIterable[AgentStreamEvent]) -> None:
@@ -314,7 +340,7 @@ class QuietTemporalAgent(TemporalAgent):
 
     With an event_stream_handler set, TemporalAgent schedules one ``…__event_stream_handler``
     activity for every tool-call and tool-result event (pydantic_ai durable_exec/temporal
-    _agent.py, ``_call_event_stream_handler_activity``). The harness already publishes tool
+    _agent.py, ``_call_event_stream_handler_activity``). The kit already publishes tool
     lifecycle from run_tool, so those activities only add history. The model's live streaming
     handler is unaffected: TemporalModel captured the real handler at construction, outside
     any workflow.
@@ -329,7 +355,7 @@ class QuietTemporalAgent(TemporalAgent):
 
 
 # ---------------------------------------------------------------------------
-# Per-run harness toolsets
+# Per-run kit toolsets
 # ---------------------------------------------------------------------------
 
 
@@ -343,14 +369,14 @@ def per_run_toolset(
     on_result: Callable[[str, str, dict[str, Any], Any], None] | None = None,
     after_call: Callable[[str], None] | None = None,
 ) -> FunctionToolset[Any]:
-    """Adapt harness tools into a FunctionToolset that may be passed to ``run(toolsets=...)``.
+    """Adapt kit tools into a FunctionToolset that may be passed to ``run(toolsets=...)``.
 
     Pydantic AI accepts a per-run FunctionToolset under Temporal only when every tool carries
     ``metadata={'temporal': False}`` (durable_exec/_runtime_toolsets.py). Harness tools run
     in-workflow through run_tool anyway, so the opt-out is exactly right, and building per run
     lets each session inject its own workspace.
 
-    This is the harness's ``as_pydantic_ai_tool`` with one change. The harness adapter turns
+    This is the kit's ``as_pydantic_ai_tool`` with one change. The kit adapter turns
     every exception into a "Tool failed" string the model sees, including the ActivityError a
     cancelled tool activity raises (Temporal reports workflow-side activity cancellation as
     ActivityError, not CancelledError). After the user interrupts, that would let the turn
@@ -388,7 +414,7 @@ def _invoker(
 ) -> Callable[..., Awaitable[Any]]:
     # Pydantic AI flattens a tool whose only parameter is a model: the model sends that
     # model's fields as top-level arguments. Re-wrap them so run_tool binds the parameter.
-    # (The harness's own adapter has the same gap; filed upstream.)
+    # (The kit's own adapter has the same gap; filed upstream.)
     single_arg = Tool(tool, takes_ctx=False).function_schema.single_arg_name
     # Pydantic AI hands tools JSON-shaped arguments. Activity tools are coerced by Temporal's
     # converter on the way into the activity, but inline tools would see plain dicts, so
@@ -412,7 +438,7 @@ def _invoker(
                 return refusal
         try:
             result = await runner.run_tool(ctx.tool_call_id, tool, injections=injections, **kwargs)
-        except Exception as exc:  # noqa: BLE001 - mirror the harness adapter, except on interrupt
+        except Exception as exc:  # noqa: BLE001 - mirror the kit adapter, except on interrupt
             if is_interrupted():
                 raise asyncio.CancelledError(f"{name} stopped by the user") from exc
             return f"Tool {name!r} failed: {tool_failure_text(exc)}"
@@ -506,6 +532,7 @@ _REJECTION_CODES = {
     "MidTurnRejected": "busy",
     "UnknownCallback": "unknown_callback",
     "CallbackAlreadyResolved": "already_resolved",
+    "AgentClosed": "session_closed",
     "MalformedCallbackResult": "invalid_result",
     "InvalidCallbackResult": "invalid_answer",
 }
@@ -545,18 +572,18 @@ def publish_rejection(
 ) -> None:
     """Report a front-door Signal the agent refused, on the stream (PRD S8).
 
-    The harness has no "rejected" event, and its event union is closed, so two harness events
+    The kit has no "rejected" event, and its event union is closed, so two kit events
     carry it:
 
     * for a message, ``message_accepted`` then ``message_handler_error`` under the message's
-      own id (``message_text``), so a harness client marks that pending message as failed;
+      own id (``message_text``), so a kit client marks that pending message as failed;
     * for every kind (message, approval, callback), one ``message_handler_error`` under ``REJECTION_MESSAGE_PREFIX +
-      request_id`` whose text is the rejection as JSON. A harness client ignores it (an error
+      request_id`` whose text is the rejection as JSON. A kit client ignores it (an error
       for an unknown message id); the bridge replaces it with an ``x_rejected`` frame.
     """
     import json
 
-    from temporal_agent_harness.harness.agent_protocol import (
+    from temporal_agent_kit.agent_protocol import (
         MessageAccepted,
         MessageDisposition,
         MessageHandlerError,
@@ -608,7 +635,7 @@ def payload_storage() -> Any:
         shared = simple_chat_data_converter().external_storage
         assert shared is not None
         return ExternalStorage(drivers=shared.drivers, payload_size_threshold=threshold)
-    from temporal_agent_harness.utils.large_payload import local_payload_storage
+    from temporal_agent_kit.utils.large_payload import local_payload_storage
 
     return local_payload_storage(payload_size_threshold=threshold)
 
@@ -621,16 +648,16 @@ def payload_storage() -> Any:
 def admit_message(runner: AgentWorkflowRunner, message: AgentMessage, *, message_id: str) -> None:
     """Admit a message as the ``send_agent_message`` Update would, under a caller-chosen id.
 
-    A replica of ``AgentWorkflowRunner._handle_send_agent_message`` (agent_workflow.py, 0.7.0)
+    A replica of ``AgentWorkflowRunner._handle_send_agent_message`` (agent_workflow.py, 0.12.1)
     that takes ``message_id`` instead of minting one. The API chooses the id before the Signal
     is sent, so a browser that sent a message while no worker was running can match the
     ``message_accepted`` event to its pending message when a worker later admits it. The
-    harness client keys messages only on ``message_id``. Synchronous, like the original: no
+    kit client keys messages only on ``message_id``. Synchronous, like the original: no
     yield between reading the head offset and publishing ``message_accepted``. Raises
     ApplicationError when the runner's validator rejects the message.
     """
-    from temporal_agent_harness.harness.agent_protocol import MessageAccepted, MessageDisposition
-    from temporal_agent_harness.harness.agent_workflow import _Admission
+    from temporal_agent_kit.agent_protocol import MessageAccepted, MessageDisposition
+    from temporal_agent_kit.agent_workflow import _Admission
 
     runner._validate_send_agent_message(message)
     handler = runner._handlers[message.type]
@@ -660,12 +687,12 @@ CallbackCheck = Callable[[str, dict[str, Any], Any], None]
 
 
 def _check_callback(runner: AgentWorkflowRunner, result: Any, check: CallbackCheck) -> None:
-    """The harness's own checks (``_validate_provide_callback_result``: unknown id, already
+    """The kit's own checks (``_validate_provide_callback_result``: unknown id, already
     resolved, result type), then ``check(tool_name, tool_input, result)`` on a result."""
     runner._validate_provide_callback_result(result)
     if result.error is None:
         entry = runner._status.callback_entry(result.tool_id)
-        assert entry is not None  # the harness validator refused unknown ids
+        assert entry is not None  # the kit validator refused unknown ids
         check(entry.tool_name, entry.tool_input, result.result)
 
 
@@ -683,7 +710,7 @@ async def admit_callback_result(
 def guard_callback_result(
     runner: AgentWorkflowRunner, check: CallbackCheck, on_update: Callable[[], None] = lambda: None
 ) -> None:
-    """Re-register the harness ``provide_callback_result`` Update with ``check`` in its
+    """Re-register the kit ``provide_callback_result`` Update with ``check`` in its
     validator, so the Update path refuses the same answers as the Signal front door."""
     def validator(result: CallbackResult) -> None:
         _check_callback(runner, result, check)
@@ -762,7 +789,7 @@ def set_policy_keeping_pending(runner: AgentWorkflowRunner, policy: ToolApproval
     calls only (PRD A14), so this sets ``_WorkflowStatus`` directly after the same
     auto-mode-needs-an-evaluator check.
     """
-    from temporal_agent_harness.harness.agent_workflow import _assert_auto_mode_has_an_evaluator
+    from temporal_agent_kit.agent_workflow import _assert_auto_mode_has_an_evaluator
 
     _assert_auto_mode_has_an_evaluator(policy, runner._auto_mode_evaluator)
     runner._status.set_approval_policy(policy)
@@ -828,12 +855,13 @@ class DrainableStream(WorkflowStream):
     """A WorkflowStream that remembers how far its readers have read, so the workflow can wait
     for them before it completes.
 
-    A completed workflow's stream can't be polled (``workflow_streams`` raises "workflow
-    execution already completed"; the harness merge then drops the cursor). A subagent completes
-    as soon as its parent stops it, which can be a second after its last turn. A reader whose
-    poll was still behind (the bridge's merged attach) then lost the end of that turn, and the
-    harness merge reported ``subagent_stream_unavailable``. Overrides
-    ``WorkflowStream._on_poll`` (temporalio contrib, pinned by tests/test_harness_ext.py) to
+    A subagent completes as soon as its parent stops it, which can be a second after its last
+    turn. Before temporalio 1.35 a completed workflow's stream couldn't be polled at all, so a
+    reader whose poll was still behind (the bridge's merged attach) lost the end of that turn,
+    and the kit merge reported ``subagent_stream_unavailable``. Since 1.35 a closed run is read
+    by a query, which needs a worker of that run's build and unexpired history; draining keeps
+    the read on the open run. Overrides
+    ``WorkflowStream._on_poll`` (temporalio contrib, pinned by tests/test_kit_ext.py) to
     record each poll's ``from_offset`` (the next offset that reader wants).
 
     Construct it directly in ``@workflow.init`` like WorkflowStream (its frame check accepts
@@ -868,7 +896,7 @@ async def drain_stream(stream: DrainableStream, *, timeout: timedelta = STREAM_D
 
 
 def install_merge_fixes() -> None:
-    """Fix the harness stream merge (``stream_merge/merge.py`` ``_Merge``, 0.7.0) giving up on a
+    """Fix the kit stream merge (``stream_merge/merge.py`` ``_Merge``, 0.12.1) giving up on a
     subagent that is still delivering. Idempotent; the API calls it once at import.
 
     A cursor's pull sets its ``head`` before the engine reaps the finished task. While the
@@ -878,7 +906,7 @@ def install_merge_fixes() -> None:
     finished tasks), so it gives the child up at once and publishes
     ``subagent_stream_unavailable``, losing the rest of the child's turn. Reaping such a task
     before new pulls start (as ``_collect_completed_pulls`` would) keeps the child pulling."""
-    from temporal_agent_harness.harness.stream_merge import merge as _merge
+    from temporal_agent_kit.stream_merge import merge as _merge
 
     cls = _merge._Merge
     if getattr(cls, "_simple_chat_reaps_emitted_pulls", False):
@@ -940,7 +968,7 @@ def guard_tool_approval(
     adjust: Callable[[ToolApprovalDecision], ToolApprovalDecision],
     on_update: Callable[[], None] = lambda: None,
 ) -> None:
-    """Re-register the harness ``tool_approval`` Update so every decision passes through
+    """Re-register the kit ``tool_approval`` Update so every decision passes through
     ``adjust`` first (used to drop "always allow" for tools where it isn't permitted). The
     Signal front door applies the same ``adjust``."""
 
@@ -1014,7 +1042,7 @@ def allow_approved_script_calls(runner: AgentWorkflowRunner) -> None:
     """Let host calls made by an approved script skip their own approval gate.
 
     The script tool (``limited_code_mode_tool``) is gated like any tool; once it runs, it was
-    approved, and "Approve script" covers its host calls once (PRD A11). The harness gates each
+    approved, and "Approve script" covers its host calls once (PRD A11). The kit gates each
     host call again (``_apply_approval_policy`` asks ``runner._policy_auto_approves`` first), so
     this wraps that instance method: inside a script's host call (``_APPROVED_SCRIPT_TOOLS``
     set, by ``_ScriptRunner``) a tool the script exposes is approved without a gate or events;
@@ -1065,7 +1093,7 @@ class _ScriptRunner:
 
 def _limited_driver_class() -> type:
     class LimitedDriver(CodeModeDriver):  # type: ignore[misc, valid-type]
-        """``CodeModeDriver`` (code_mode/driver.py, 0.7.0) with ``ScriptLimits`` applied in
+        """``CodeModeDriver`` (code_mode/driver.py, 0.12.1) with ``ScriptLimits`` applied in
         ``_run_call``, the one place every host call and file operation of a step starts."""
 
         def __init__(self, *args: Any, limits: ScriptLimits, **kwargs: Any) -> None:
@@ -1108,7 +1136,7 @@ def limited_code_mode_tool(
     limits: ScriptLimits = ScriptLimits(),
     guide: str = "",
 ) -> Callable[..., Awaitable[str]]:
-    """The harness ``code_mode_tool`` (code_mode/tool.py ``_code_mode_tool``, 0.7.0), rebuilt
+    """The kit ``code_mode_tool`` (code_mode/tool.py ``_code_mode_tool``, 0.12.1), rebuilt
     so its script runs on our driver:
 
     * ``limits`` (``ScriptLimits``): over-limit calls fail inside the script as RuntimeError;
@@ -1124,14 +1152,16 @@ def limited_code_mode_tool(
     load_stepper()
     stubs = render_type_check_stubs(tools)
     if mount_list:
-        stubs = _replace(stubs, source=stubs.source + cm._FILESYSTEM_STUB)
+        stubs = _replace(stubs, source=f"{stubs.source}\n{FILESYSTEM_STUB}\n")
     coercers = cm._build_coercers(tools)
-    docstring = cm._CONTRACT.format(
-        sandbox=cm._WITH_FILESYSTEM if mount_list else cm._NO_FILESYSTEM,
-        interface=render_host_interface(tools) if tools else "(none)",
-        filesystem=cm._render_filesystem(mount_list),
-        guide=guide,
-    )
+    fill = {
+        "sandbox": WITH_FILESYSTEM if mount_list else NO_FILESYSTEM,
+        "interface": render_host_interface(tools) if tools else "(none)",
+        "filesystem": cm._render_filesystem(mount_list),
+        "guide": guide,
+    }
+    # One pass, as upstream does, so a placeholder inside a filled-in value is left as it is.
+    docstring = cm._PLACEHOLDER.sub(lambda m: fill[m[1]], CONTRACT)
     injection_values = dict(injections or {})
     fs_tools = frozenset({"fs_seed", "fs_stat", "fs_read", "fs_list", "fs_write", "fs_mkdir", "fs_delete", "fs_rename"})
     allowed = frozenset(tools_by_name) | (fs_tools if mount_list else frozenset())

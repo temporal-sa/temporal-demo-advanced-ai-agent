@@ -29,10 +29,10 @@ export function viewDefs(config: AgentConfig | null, me: Me | null, sessionId: s
   return [
     { name: "Product view", caption: "What your users see", href: null, current: true },
     {
-      name: "Harness console",
+      name: "Agent Kit console",
       caption: "The agent loop as the harness records it",
       href: consoleHref,
-      reason: links?.console?.reason ?? "The harness console isn't available here.",
+      reason: links?.console?.reason ?? "The Agent Kit console isn't available here.",
     },
     {
       name: "Temporal UI",

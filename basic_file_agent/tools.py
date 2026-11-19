@@ -6,7 +6,7 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
-from temporal_agent_harness.harness import agent
+from temporal_agent_kit import agent
 from temporalio.workflow import ActivityConfig
 
 FILE_IO = ActivityConfig(start_to_close_timeout=timedelta(seconds=30))

@@ -1,4 +1,4 @@
-"""Contract tests for the private harness and Pydantic AI internals harness_ext depends on.
+"""Contract tests for the private harness and Pydantic AI internals kit_ext depends on.
 
 If a harness or Pydantic AI upgrade changes any of these, this file fails first, pointing at
 the helper to revisit (CTO memo 001, "Private harness internals we'd depend on").
@@ -16,7 +16,7 @@ os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-not-used")
 
 class HarnessInternals(unittest.TestCase):
     def test_runner_private_members(self) -> None:
-        from temporal_agent_harness.harness.agent_workflow import AgentWorkflowRunner, _WorkflowStatus
+        from temporal_agent_kit.agent_workflow import AgentWorkflowRunner, _WorkflowStatus
 
         for name in (
             "_validate_send_agent_message",
@@ -45,9 +45,9 @@ class HarnessInternals(unittest.TestCase):
         self.assertIn("self._joining", inspect.getsource(AgentWorkflowRunner.__init__))
 
     def test_admission_replica_matches_harness(self) -> None:
-        """harness_ext.admit_message replicates _handle_send_agent_message; the original must
+        """kit_ext.admit_message replicates _handle_send_agent_message; the original must
         still mint ids and publish MessageAccepted the way the replica assumes."""
-        from temporal_agent_harness.harness.agent_workflow import AgentWorkflowRunner, _Admission
+        from temporal_agent_kit.agent_workflow import AgentWorkflowRunner, _Admission
 
         src = inspect.getsource(AgentWorkflowRunner._handle_send_agent_message)
         for needle in (
@@ -67,7 +67,7 @@ class HarnessInternals(unittest.TestCase):
         )
 
     def test_update_registration_names(self) -> None:
-        from temporal_agent_harness.harness.agent_protocol import SEND_AGENT_MESSAGE_UPDATE
+        from temporal_agent_kit.agent_protocol import SEND_AGENT_MESSAGE_UPDATE
 
         self.assertEqual(SEND_AGENT_MESSAGE_UPDATE, "send_agent_message")
 
@@ -78,7 +78,7 @@ class HarnessInternals(unittest.TestCase):
         self.assertIn("self._base_offset", inspect.getsource(WorkflowStream.__init__))
 
     def test_observer_private_members(self) -> None:
-        from temporal_agent_harness.ai_sdks.pydantic_ai_harness import PydanticAIStreamObserver
+        from temporal_agent_kit.ai_sdks.pydantic_ai import PydanticAIStreamObserver
 
         src = inspect.getsource(PydanticAIStreamObserver.__init__)
         for attr in ("self._context", "self._model", "self._stack", "self._publisher"):
@@ -87,23 +87,34 @@ class HarnessInternals(unittest.TestCase):
 
     def test_adapter_helpers_exist(self) -> None:
         """per_run_toolset reuses the harness adapter's private schema and runner helpers."""
-        from temporal_agent_harness.ai_sdks import pydantic_ai_harness as h
+        from temporal_agent_kit.ai_sdks import pydantic_ai as h
 
         self.assertTrue(callable(getattr(h, "_tool_schema", None)))
         self.assertTrue(callable(getattr(h, "_runner_from_ctx", None)))
 
-    def test_harness_handler_still_calls_usage_as_method(self) -> None:
-        """If upstream fixes this, harness_ext.stream_usage becomes unnecessary (harmless)."""
-        from temporal_agent_harness.ai_sdks import pydantic_ai_harness
+    def test_tool_output_published_as_model_text(self) -> None:
+        """tool_end carries str(result) (kit_ext._install_tool_output_text), at both call sites."""
+        from pydantic import BaseModel
+        from temporal_agent_kit import agent_workflow
 
-        self.assertIn("stream.usage()", inspect.getsource(pydantic_ai_harness.harness_event_stream_handler))
+        import simple_chat_agent.agent.kit_ext  # noqa: F401 - installs the text output
+
+        class Result(BaseModel):
+            path: str
+
+            def __str__(self) -> str:
+                return f"Created {self.path}."
+
+        self.assertEqual(agent_workflow._tool_output_json("write_file", Result(path="a.py")), "Created a.py.")
+        for defn in (agent_workflow.tool_defn, agent_workflow.activity_tool_defn):
+            self.assertIn("_tool_output_json(tool_name, result)", inspect.getsource(defn))
 
 
 class PydanticAIInternals(unittest.TestCase):
     def test_usage_extract_fix_installed_and_keeps_tokens(self) -> None:
         from pydantic_ai.usage import RequestUsage
 
-        import simple_chat_agent.agent.harness_ext  # noqa: F401 - installs the fix
+        import simple_chat_agent.agent.kit_ext  # noqa: F401 - installs the fix
 
         usage = RequestUsage.extract(
             {
@@ -148,7 +159,7 @@ class CloseWithNote(unittest.TestCase):
             UserPromptPart,
         )
 
-        from simple_chat_agent.agent.harness_ext import close_with_note
+        from simple_chat_agent.agent.kit_ext import close_with_note
 
         history = [
             ModelRequest(parts=[UserPromptPart("do it")]),
@@ -173,7 +184,7 @@ class ToolFailureText(unittest.TestCase):
         from temporalio.api.enums.v1 import RetryState
         from temporalio.exceptions import ActivityError, ApplicationError
 
-        from simple_chat_agent.agent.harness_ext import tool_failure_text
+        from simple_chat_agent.agent.kit_ext import tool_failure_text
 
         cause = ApplicationError("notes/c.txt does not exist.", type="Workspace_not_found", non_retryable=True)
         err = ActivityError(

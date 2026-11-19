@@ -332,7 +332,7 @@ class Takeover(_Base):
         return proc
 
     async def test_2_2c_lease_takeover_no_gaps_no_duplicates(self) -> None:
-        from temporal_agent_harness.harness.agent_client import AgentClient
+        from temporal_agent_kit.agent_client import AgentClient
 
         from simple_chat_agent.api.agent_bridge import sse_data
 

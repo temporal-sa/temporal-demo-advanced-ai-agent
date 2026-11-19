@@ -48,9 +48,9 @@ async def connect() -> Any:
     from pydantic_ai.durable_exec.temporal import PydanticAIPlugin
     from temporalio.client import Client
 
-    from temporal_agent_harness.plugin import AgentHarnessPlugin
+    from temporal_agent_kit.plugin import AgentKitPlugin
 
-    from simple_chat_agent.agent.harness_ext import payload_storage
+    from simple_chat_agent.agent.kit_ext import payload_storage
 
     from simple_chat_agent.agent.tools.artifacts import ARTIFACT_TOOLS
     from simple_chat_agent.agent.tools.research import RESEARCH_TOOLS
@@ -59,7 +59,7 @@ async def connect() -> Any:
     return await Client.connect(
         ADDRESS,
         namespace="default",
-        plugins=[PydanticAIPlugin(), AgentHarnessPlugin(
+        plugins=[PydanticAIPlugin(), AgentKitPlugin(
             tools=[*WORKSPACE_TOOLS, *TEST_TOOLS, *RESEARCH_TOOLS, *ARTIFACT_TOOLS], large_payload_offload=payload_storage()
         )],
     )
@@ -93,7 +93,7 @@ async def running_worker(client: Any, task_queue: str) -> AsyncIterator[Any]:
 
 
 async def start_session(client: Any, task_queue: str, **init: Any) -> Any:
-    from temporal_agent_harness.harness.agent_protocol import AgentConfig
+    from temporal_agent_kit.agent_protocol import AgentConfig
 
     from simple_chat_agent.agent.contracts import AGENT_WORKFLOW_TYPE, CodingAgentInit
 
@@ -167,7 +167,7 @@ class EventCollector:
     async def __aenter__(self) -> EventCollector:
         from temporalio.contrib.workflow_streams import WorkflowStreamClient
 
-        from temporal_agent_harness.harness.agent_protocol import AgentEvent
+        from temporal_agent_kit.agent_protocol import AgentEvent
 
         stream = WorkflowStreamClient.create(self._client, self._workflow_id)
 

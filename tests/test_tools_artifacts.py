@@ -32,7 +32,7 @@ from simple_chat_agent.agent.tools.artifacts import (
 )
 from simple_chat_agent.common.attachments import USER_ATTACHMENT_SOURCE, create_user_attachment
 from simple_chat_agent.common.store import AppStore
-from temporal_agent_harness.harness.agent_workflow import tool_activity
+from temporal_agent_kit.agent_workflow import tool_activity
 
 OWNER = "user-1"
 SESSION = "coding-agent-abc"
@@ -440,17 +440,17 @@ class _FakeRunner:
 
 
 class ModelFacingRenderingTests(_StoreCase):
-    """M1 regression: what the model receives goes through harness_ext.per_run_toolset."""
+    """M1 regression: what the model receives goes through kit_ext.per_run_toolset."""
 
     async def model_sees(self, tool_name: str, result: Any, **kwargs: Any) -> Any:
         from types import SimpleNamespace
 
-        from simple_chat_agent.agent import harness_ext
+        from simple_chat_agent.agent import kit_ext
 
         runner = _FakeRunner(result)
-        toolset = harness_ext.per_run_toolset(list(ARTIFACT_TOOLS), id="t", injections={})
+        toolset = kit_ext.per_run_toolset(list(ARTIFACT_TOOLS), id="t", injections={})
         invoke = toolset.tools[tool_name].function
-        with patch.object(harness_ext, "_runner_from_ctx", lambda ctx, tool_name: runner):
+        with patch.object(kit_ext, "_runner_from_ctx", lambda ctx, tool_name: runner):
             seen = await invoke(SimpleNamespace(tool_call_id="call-1"), **kwargs)
         self.assertEqual(len(runner.calls), 1)
         return seen
@@ -513,7 +513,7 @@ _PENDING_OLD_HARNESS_IMPORTS: set[str] = set()
 
 class NoOldHarnessImportTests(unittest.TestCase):
     """Minor 16: the new agent and the shared code must not import the in-tree agent_harness
-    package (P5 deletes it). ``temporal_agent_harness`` is the official one and is fine."""
+    package (P5 deletes it). ``temporal_agent_kit`` is the official one and is fine."""
 
     def offenders(self) -> set[str]:
         found = set()
@@ -530,7 +530,7 @@ class NoOldHarnessImportTests(unittest.TestCase):
         self.assertEqual(_PENDING_OLD_HARNESS_IMPORTS - self.offenders(), set())
 
     def test_pattern_ignores_the_official_harness(self) -> None:
-        self.assertIsNone(_OLD_HARNESS_IMPORT.search("from temporal_agent_harness.harness import agent"))
+        self.assertIsNone(_OLD_HARNESS_IMPORT.search("from temporal_agent_kit import agent"))
         self.assertIsNotNone(_OLD_HARNESS_IMPORT.search("    from agent_harness.attachments import X"))
         self.assertIsNotNone(_OLD_HARNESS_IMPORT.search("import agent_harness"))
 

@@ -14,11 +14,11 @@ os.environ.setdefault("ANTHROPIC_API_KEY", "unit-test-not-used")
 
 from temporalio.exceptions import ApplicationError  # noqa: E402
 
-from temporal_agent_harness.harness.code_mode import code_mode_type_check  # noqa: E402
-from temporal_agent_harness.harness.code_mode.driver import CodeModeDriver  # noqa: E402
-from temporal_agent_harness.harness.code_mode.vfs import FileOp  # noqa: E402
+from temporal_agent_kit.code_mode import code_mode_type_check  # noqa: E402
+from temporal_agent_kit.code_mode.driver import CodeModeDriver  # noqa: E402
+from temporal_agent_kit.code_mode.vfs import FileOp  # noqa: E402
 
-from simple_chat_agent.agent import approvals, harness_ext  # noqa: E402
+from simple_chat_agent.agent import approvals, kit_ext  # noqa: E402
 from simple_chat_agent.agent.tools import code_mode  # noqa: E402
 
 
@@ -47,18 +47,18 @@ class _Runner:
         return inherently_safe
 
     async def run_tool(self, call_id: str, tool: Any, /, *args: Any, **kwargs: Any) -> Any:
-        self.calls.append((call_id, harness_ext._APPROVED_SCRIPT_TOOLS.get()))
+        self.calls.append((call_id, kit_ext._APPROVED_SCRIPT_TOOLS.get()))
         return self._policy_auto_approves("fs_read", inherently_safe=False)
 
 
 class ScriptApprovalTests(unittest.TestCase):
     def test_host_calls_nest_and_skip_their_gate_only_inside_the_script(self) -> None:
         runner = _Runner()
-        harness_ext.allow_approved_script_calls(runner)  # type: ignore[arg-type]
-        harness_ext.allow_approved_script_calls(runner)  # idempotent
+        kit_ext.allow_approved_script_calls(runner)  # type: ignore[arg-type]
+        kit_ext.allow_approved_script_calls(runner)  # idempotent
         # Outside a script: the policy answers.
         self.assertFalse(runner._policy_auto_approves("fs_read", inherently_safe=False))
-        script = harness_ext._ScriptRunner(runner, "toolu_1", frozenset({"fs_read"}))  # type: ignore[arg-type]
+        script = kit_ext._ScriptRunner(runner, "toolu_1", frozenset({"fs_read"}))  # type: ignore[arg-type]
 
         async def two() -> list[Any]:
             return [await script.run_tool("random", object()), await script.run_tool("random", object())]
@@ -66,22 +66,22 @@ class ScriptApprovalTests(unittest.TestCase):
         self.assertEqual(asyncio.run(two()), [True, True])
         self.assertEqual([c[0] for c in runner.calls], ["toolu_1/1", "toolu_1/2"])
         self.assertEqual(runner.calls[0][1], frozenset({"fs_read"}))
-        self.assertIsNone(harness_ext._APPROVED_SCRIPT_TOOLS.get())
+        self.assertIsNone(kit_ext._APPROVED_SCRIPT_TOOLS.get())
         # A tool the script doesn't expose still goes to the policy.
-        token = harness_ext._APPROVED_SCRIPT_TOOLS.set(frozenset({"fs_read"}))
+        token = kit_ext._APPROVED_SCRIPT_TOOLS.set(frozenset({"fs_read"}))
         try:
             self.assertFalse(runner._policy_auto_approves("write_file", inherently_safe=False))
         finally:
-            harness_ext._APPROVED_SCRIPT_TOOLS.reset(token)
+            kit_ext._APPROVED_SCRIPT_TOOLS.reset(token)
 
 
 class LimitTests(unittest.TestCase):
-    def _driver(self, limits: harness_ext.ScriptLimits) -> Any:
-        cls = harness_ext._limited_driver_class()
+    def _driver(self, limits: kit_ext.ScriptLimits) -> Any:
+        cls = kit_ext._limited_driver_class()
         return cls(object(), {}, {}, injections={}, stubs=None, limits=limits)
 
     def test_host_call_cap_and_concurrency(self) -> None:
-        driver = self._driver(harness_ext.ScriptLimits(max_host_calls=16, max_file_ops=2, concurrency=4))
+        driver = self._driver(kit_ext.ScriptLimits(max_host_calls=16, max_file_ops=2, concurrency=4))
         stepper = SimpleNamespace(Sleep=type("Sleep", (), {}))
         state = {"now": 0, "peak": 0}
 
@@ -104,7 +104,7 @@ class LimitTests(unittest.TestCase):
         self.assertEqual(state["peak"], 4)
 
     def test_file_ops_have_their_own_cap(self) -> None:
-        driver = self._driver(harness_ext.ScriptLimits(max_host_calls=1, max_file_ops=2, concurrency=4))
+        driver = self._driver(kit_ext.ScriptLimits(max_host_calls=1, max_file_ops=2, concurrency=4))
         stepper = SimpleNamespace(Sleep=type("Sleep", (), {}))
         op = FileOp.__new__(FileOp)
 

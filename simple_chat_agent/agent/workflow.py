@@ -1,4 +1,4 @@
-"""CodingAgent: the coding agent's workflow, on temporal-agent-harness 0.7.0.
+"""CodingAgent: the coding agent's workflow, on temporal-agent-kit 0.12.1.
 
 A bare ``@workflow.defn`` (not ``@agent.defn``) so that we own ``run`` and can continue as
 new between turns, which the harness's generated run cannot do (CTO memo 001, CTO-5). The
@@ -21,17 +21,17 @@ from temporalio.exceptions import ApplicationError
 with workflow.unsafe.imports_passed_through():
     from pydantic_ai.capabilities import Hooks
     from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter, UserPromptPart
-    from temporal_agent_harness.harness import agent
-    from temporal_agent_harness.harness.agent_protocol import (
+    from temporal_agent_kit import agent
+    from temporal_agent_kit.agent_protocol import (
         AgentConfig,
         AgentMessage,
         MidTurn,
         ToolApprovalDecision,
     )
-    from temporal_agent_harness.harness.agent_workflow import AgentWorkflowRunner, MessageContext
+    from temporal_agent_kit.agent_workflow import AgentWorkflowRunner, MessageContext
     from temporalio.contrib.workflow_streams import WorkflowStream
 
-    from simple_chat_agent.agent import approvals, context, harness_ext, mcp
+    from simple_chat_agent.agent import approvals, context, kit_ext, mcp
     from simple_chat_agent.agent.budget import HistoryBudget
     from simple_chat_agent.agent.contracts import (
         AGENT_WORKFLOW_TYPE,
@@ -241,11 +241,11 @@ class CodingAgent:
             ),
         )
         self._updates_this_run = 0
-        harness_ext.guard_tool_approval(self._runner, self._limit_remember, on_update=self._count_update)
+        kit_ext.guard_tool_approval(self._runner, self._limit_remember, on_update=self._count_update)
         # Browser callback answers (PRD A12) are checked against the question they answer, on
         # the Signal front door and on the harness Update alike.
-        harness_ext.guard_callback_result(self._runner, check_callback_result, on_update=self._count_update)
-        harness_ext.restore_turn_counter(self._runner, carried.turn_counter)
+        kit_ext.guard_callback_result(self._runner, check_callback_result, on_update=self._count_update)
+        kit_ext.restore_turn_counter(self._runner, carried.turn_counter)
         self._history: list[ModelMessage] = ModelMessagesTypeAdapter.validate_python(
             carried.conversation
         )
@@ -258,7 +258,7 @@ class CodingAgent:
         # Code Mode (PRD A11): built once per run; an approved script's host calls skip their
         # own gate ("Approve script" approves them once).
         self._code_mode = build_code_mode_tool(self._workspace_id)
-        harness_ext.allow_approved_script_calls(self._runner)
+        kit_ext.allow_approved_script_calls(self._runner)
         self._turns_this_run = 0
         # Web pages the provider's search returned during the turn in flight (ChatReply.sources).
         self._turn_sources: list[Any] = []
@@ -280,7 +280,7 @@ class CodingAgent:
 
         # Messages sent through the harness Update are refused while we hand off to the next
         # run; callers retry and reach the new run. The Signal front door buffers instead.
-        harness_ext.guard_send_agent_message(
+        kit_ext.guard_send_agent_message(
             self._runner, lambda: self._continuing, on_update=self._count_update
         )
 
@@ -323,7 +323,7 @@ class CodingAgent:
         )
 
     def _ready_to_continue_as_new(self) -> bool:
-        return self._wants_continue_as_new() and harness_ext.is_quiescent(self._runner)
+        return self._wants_continue_as_new() and kit_ext.is_quiescent(self._runner)
 
     async def _continue_as_new(self, config: AgentConfig, data: CodingAgentInit) -> None:
         # From here on, Signals buffer into _deferred and the Update path refuses, so nothing
@@ -331,11 +331,11 @@ class CodingAgent:
         self._continuing = True
         self._stream.detach_pollers()
         await workflow.wait_condition(workflow.all_handlers_finished)
-        if harness_ext.is_closed(self._runner):
+        if kit_ext.is_closed(self._runner):
             # A close arrived during the handoff: finish this run instead of continuing, and
             # tell senders their buffered messages won't run.
             for message in self._deferred:
-                harness_ext.publish_rejection(
+                kit_ext.publish_rejection(
                     self._runner,
                     kind="message",
                     request_id=message.request_id,
@@ -349,8 +349,8 @@ class CodingAgent:
         # mid-poll at the handoff resumes inside the retained tail instead of falling behind
         # the truncation and silently skipping the last turn's closing events. (P2: truncate
         # to the Redis bridge's acknowledged offset instead of a fixed tail.)
-        head = harness_ext.stream_head(self._stream)
-        base = harness_ext.stream_base(self._stream)
+        head = kit_ext.stream_head(self._stream)
+        base = kit_ext.stream_base(self._stream)
         if self._stream_acked > 0:
             cutoff = min(self._stream_acked, head - CAN_TAIL_PAST_ACK)
         else:
@@ -372,7 +372,7 @@ class CodingAgent:
         carried = CarriedState(
             conversation=ModelMessagesTypeAdapter.dump_python(self._history, mode="json"),
             stream_state=self._stream.get_state(),
-            turn_counter=harness_ext.turn_counter(self._runner),
+            turn_counter=kit_ext.turn_counter(self._runner),
             stream_acked=self._stream_acked,
             recent_request_ids=list(self._seen_requests),
             model=self._model,
@@ -390,7 +390,7 @@ class CodingAgent:
         next_config = AgentConfig(
             approval_policy=self._runner.approval_policy,
             auto_approval_criteria=self._runner.auto_approval_criteria,
-            agent_id=config.agent_id or harness_ext.agent_id(self._runner),
+            agent_id=config.agent_id or kit_ext.agent_id(self._runner),
         )
         next_data = data.model_copy(
             update={"carried": carried, "force_continue_as_new_after_turns": None}
@@ -407,9 +407,9 @@ class CodingAgent:
         return {
             "messages": len(self._history),
             "responses": len(responses),
-            "turn_counter": harness_ext.turn_counter(self._runner),
-            "stream_base": harness_ext.stream_base(self._stream),
-            "stream_head": harness_ext.stream_head(self._stream),
+            "turn_counter": kit_ext.turn_counter(self._runner),
+            "stream_base": kit_ext.stream_base(self._stream),
+            "stream_head": kit_ext.stream_head(self._stream),
             "stream_acked": self._stream_acked,
             "model": self._model.registry_key,
             "allowed_tools": sorted(self._runner.approval_policy.auto_approve_tools),
@@ -460,10 +460,10 @@ class CodingAgent:
                     remember=approval.remember,
                 )
             )
-            await harness_ext.admit_approval(self._runner, decision)
+            await kit_ext.admit_approval(self._runner, decision)
         except ApplicationError as exc:
             self._reject(approval.request_id, exc)
-            harness_ext.publish_rejection(
+            kit_ext.publish_rejection(
                 self._runner,
                 kind="approval",
                 request_id=approval.request_id,
@@ -480,12 +480,12 @@ class CodingAgent:
         if self._is_duplicate(answer.request_id):
             return
         try:
-            await harness_ext.admit_callback_result(
+            await kit_ext.admit_callback_result(
                 self._runner, answer.tool_id, answer.result, answer.error, check_callback_result
             )
         except ApplicationError as exc:
             self._reject(answer.request_id, exc)
-            harness_ext.publish_rejection(
+            kit_ext.publish_rejection(
                 self._runner,
                 kind="callback",
                 request_id=answer.request_id,
@@ -495,14 +495,14 @@ class CodingAgent:
 
     def _admit(self, message: FrontDoorMessage) -> None:
         try:
-            harness_ext.admit_message(
+            kit_ext.admit_message(
                 self._runner,
                 AgentMessage(type=message.type, payload=message.payload),
                 message_id=message.request_id,
             )
         except ApplicationError as exc:
             self._reject(message.request_id, exc)
-            harness_ext.publish_rejection(
+            kit_ext.publish_rejection(
                 self._runner,
                 kind="message",
                 request_id=message.request_id,
@@ -521,9 +521,9 @@ class CodingAgent:
         ``approvals.record_decision``), so the auto-mode judge can recognize a future call
         that looks like this one instead of escalating it too. Every decision that reaches a
         person passes through here — the Signal front door and the harness Update alike (see
-        ``harness_ext.guard_tool_approval``) — so this is the one place to do it."""
-        tool = harness_ext.pending_tool_name(self._runner, decision.tool_id) or ""
-        tool_input = harness_ext.pending_tool_input(self._runner, decision.tool_id)
+        ``kit_ext.guard_tool_approval``) — so this is the one place to do it."""
+        tool = kit_ext.pending_tool_name(self._runner, decision.tool_id) or ""
+        tool_input = kit_ext.pending_tool_input(self._runner, decision.tool_id)
         if tool and tool_input is not None:
             approvals.record_decision(
                 self._approval_history, tool, tool_input, approved=decision.approved, reason=decision.reason
@@ -566,10 +566,10 @@ class CodingAgent:
         try:
             text = await task
             return ChatReply(text=text, sources=self._turn_sources)
-        except harness_ext.CheckpointNeeded as cp:
+        except kit_ext.CheckpointNeeded as cp:
             # Keep the work so far and hand off to a fresh run; the user continues from there.
             if self._snapshot is not None:
-                self._history = harness_ext.close_with_note(
+                self._history = kit_ext.close_with_note(
                     self._snapshot,
                     tool_note=INTERRUPTED_TOOL_NOTE,
                     user_note="(The turn paused at a checkpoint. Continue when I say so.)",
@@ -583,20 +583,20 @@ class CodingAgent:
             # Cancelling the run surfaces as asyncio.CancelledError, as ActivityError("Activity
             # cancelled") from an in-flight activity, or as TurnInterrupted from the
             # before-request hook. Anything else is a real failure, interrupt or not.
-            if not (self._interrupted and harness_ext.is_cancellation(exc)):
-                kind = harness_ext.explained_failure(exc)
+            if not (self._interrupted and kit_ext.is_cancellation(exc)):
+                kind = kit_ext.explained_failure(exc)
                 if kind is None:
                     raise
                 if self._snapshot is not None:
-                    self._history = harness_ext.close_with_note(
+                    self._history = kit_ext.close_with_note(
                         self._snapshot, tool_note=INTERRUPTED_TOOL_NOTE, user_note=f"(The turn stopped: {kind}.)"
                     )
-                return ChatReply(text=harness_ext.EXPLAINED_FAILURES[kind], error=kind)
+                return ChatReply(text=kit_ext.EXPLAINED_FAILURES[kind], error=kind)
             # The turn was stopped. If it reached the model, keep everything up to the last
             # model response, close the tool calls it left open, and record the stop so the
             # next turn has context. If it never reached the model, history is unchanged.
             if self._snapshot is not None:
-                self._history = harness_ext.close_with_note(
+                self._history = kit_ext.close_with_note(
                     self._snapshot,
                     tool_note=INTERRUPTED_TOOL_NOTE,
                     user_note="(I stopped this turn. Don't continue it unless I ask.)",
@@ -608,12 +608,12 @@ class CodingAgent:
             self._steer.clear()
             # Subagents live for one turn: none outlive the turn that started them (and none
             # may be running when the agent continues as new).
-            for subagent_id in harness_ext.active_subagent_ids(self._runner):
+            for subagent_id in kit_ext.active_subagent_ids(self._runner):
                 try:
                     await self._runner.stop_subagent(subagent_id)
                 except Exception:  # noqa: BLE001 - e.g. the child already closed
                     workflow.logger.warning("could not stop subagent %s; forgetting it", subagent_id)
-                    harness_ext.forget_subagent(self._runner, subagent_id)
+                    kit_ext.forget_subagent(self._runner, subagent_id)
 
     def _tools(self) -> list[Any]:
         research = [t for t in RESEARCH_TOOLS if t.__name__ in set(self._data.research_tools)]
@@ -684,7 +684,7 @@ class CodingAgent:
             before_model_request=self._before_model_request,
             after_model_request=self._after_model_request,
         )
-        toolset = harness_ext.per_run_toolset(
+        toolset = kit_ext.per_run_toolset(
             self._tools(),
             id="coding",
             injections={
@@ -726,7 +726,7 @@ class CodingAgent:
     async def _before_model_request(self, ctx: Any, request_context: Any) -> Any:
         if self._interrupted:
             # A tool result arrived after Stop; don't start another model call.
-            raise harness_ext.TurnInterrupted()
+            raise kit_ext.TurnInterrupted()
         info = workflow.info()
         reason = self._history_budget.should_checkpoint(
             history_length=info.get_current_history_length(),
@@ -736,7 +736,7 @@ class CodingAgent:
         )
         if reason is not None:
             self._snapshot = list(request_context.messages)
-            raise harness_ext.CheckpointNeeded(reason)
+            raise kit_ext.CheckpointNeeded(reason)
         self._snapshot = list(request_context.messages)
         self._steer_into_request(request_context)
         self._remind_plan(request_context)
@@ -840,7 +840,7 @@ class CodingAgent:
             if approvals.remember_allowed(approvals.risk_class_for(tool, self._runner.auto_approval_criteria)):
                 policy = policy.with_tool_allowed(tool)
         # New calls only: calls already waiting for a human stay waiting.
-        harness_ext.set_policy_keeping_pending(self._runner, policy)
+        kit_ext.set_policy_keeping_pending(self._runner, policy)
         self._data = self._data.model_copy(update={"posture": msg.posture})
         return SettingsAck(
             detail=f"Approvals: {msg.posture.replace('_', ' ')}.", setting="posture", posture=msg.posture
@@ -875,7 +875,7 @@ class CodingAgent:
         # The posture's own allow-list stays; everything added by "always allow" goes. Carried
         # across continue-as-new by AgentConfig.approval_policy, like the allow-list itself.
         forgotten = sorted(set(self._runner.approval_policy.auto_approve_tools) - set(policy.auto_approve_tools))
-        harness_ext.set_policy_keeping_pending(self._runner, policy)
+        kit_ext.set_policy_keeping_pending(self._runner, policy)
         if not forgotten:
             return AlwaysAllowedForgotten(detail="Nothing was always allowed.")
         return AlwaysAllowedForgotten(
@@ -888,11 +888,11 @@ class CodingAgent:
         task, turn_id = self._run_task, self._run_turn_id
         if task is None or turn_id is None or task.done():
             return Ack(ok=False, detail="Nothing is running.")
-        declined = harness_ext.decline_pending_approvals(
+        declined = kit_ext.decline_pending_approvals(
             self._runner, turn_id=turn_id, reason=msg.reason
         )
         # Open questions and file requests in the turn fail too (their cards close).
-        harness_ext.fail_pending_callbacks(self._runner, turn_id=turn_id, reason=msg.reason)
+        kit_ext.fail_pending_callbacks(self._runner, turn_id=turn_id, reason=msg.reason)
         self._interrupted = True
         task.cancel()
         return Ack(detail=f"Stopped. Declined {declined} pending approval(s).")

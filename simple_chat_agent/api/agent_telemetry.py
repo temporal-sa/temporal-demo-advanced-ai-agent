@@ -69,7 +69,7 @@ X_USAGE = "x_usage"
 X_RECOVERY = "x_recovery"
 X_WORKER = "x_worker"
 X_REJECTED = "x_rejected"
-# Same value as harness_ext.REJECTION_MESSAGE_PREFIX (the workflow side); a test pins them.
+# Same value as kit_ext.REJECTION_MESSAGE_PREFIX (the workflow side); a test pins them.
 REJECTION_MESSAGE_PREFIX = "x_rejected:"
 
 MODEL_ACTIVITY_SUFFIXES = ("__model_request_stream", "__model_request")

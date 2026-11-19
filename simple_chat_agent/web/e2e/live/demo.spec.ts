@@ -306,8 +306,8 @@ test("3i demo script (§2.5) end to end", async ({ page, browser }, testInfo) =>
     });
 
     // -- 5:40 -------------------------------------------------------------------------------
-    await s.beat("5:40 harness console on the same session", async () => {
-      const link = page.getByRole("navigation", { name: "Views" }).getByRole("link", { name: /Harness console/ });
+    await s.beat("5:40 Agent Kit console on the same session", async () => {
+      const link = page.getByRole("navigation", { name: "Views" }).getByRole("link", { name: /Agent Kit console/ });
       const href = await link.getAttribute("href");
       expect(href).toContain(`s=${encodeURIComponent(id)}`);
       // Another app: open it in its own context (same sign-in) so its requests stay out of

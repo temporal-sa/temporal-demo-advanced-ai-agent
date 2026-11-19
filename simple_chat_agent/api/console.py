@@ -1,9 +1,9 @@
-"""The harness console at ``/console/``, backed by our owner-scoped routes (P2 step 2.4, CTO-6).
+"""The Agent Kit console at ``/console/``, backed by our owner-scoped routes (P2 step 2.4, CTO-6).
 
-The console is the harness's packaged UI (``temporal_agent_harness/ui/dist``), served
+The console is the harness's packaged UI (``temporal_agent_kit/ui/dist``), served
 unchanged. It calls ``api/<path>`` relative to its page, so from ``/console/`` every call
 lands on ``/console/api/<path>``. Those routes are ours; the packaged app
-(``create_agent_harness_app``) is never mounted: it lists every session in the namespace,
+(``create_agent_kit_app``) is never mounted: it lists every session in the namespace,
 sends open CORS, starts its own session manager and takes the file viewer's config from the
 request.
 
@@ -101,7 +101,7 @@ def console_enabled() -> bool:
 
 
 def console_dist() -> Path | None:
-    from temporal_agent_harness.ui import packaged_ui_dist
+    from temporal_agent_kit.ui import packaged_ui_dist
 
     return packaged_ui_dist()
 
@@ -196,7 +196,7 @@ async def _worker_readiness(temporal: Callable[[], Awaitable[Any]], task_queue: 
     """The agent picker's readiness chip, from DescribeTaskQueue (no Query, no worker)."""
     from dataclasses import asdict
 
-    from temporal_agent_harness.web.task_queue_status import describe_task_queue_workers
+    from temporal_agent_kit.web.task_queue_status import describe_task_queue_workers
 
     try:
         workers = await describe_task_queue_workers(await temporal(), [task_queue])
@@ -231,7 +231,7 @@ def mount_console(app: FastAPI, agent_api: AgentApi, *, app_store: Callable[[], 
         return False
     dist = console_dist()
     if dist is None:
-        log.warning("the harness console is on but its assets aren't installed; /console is off")
+        log.warning("the Agent Kit console is on but its assets aren't installed; /console is off")
         return False
     console_api = create_console_router(
         agent_router=agent_api.router(app_store=app_store),

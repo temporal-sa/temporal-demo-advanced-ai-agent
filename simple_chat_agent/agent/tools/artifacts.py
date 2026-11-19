@@ -33,7 +33,7 @@ from temporalio.common import RetryPolicy
 from temporalio.exceptions import ApplicationError
 from temporalio.workflow import ActivityConfig
 
-from temporal_agent_harness.harness import agent
+from temporal_agent_kit import agent
 
 from simple_chat_agent.common.attachments import (
     artifact_is_user_attachment,
@@ -88,7 +88,7 @@ class ArtifactResult(BaseModel):
     download_url: str
     expires_at: str
 
-    # The harness adapter (harness_ext._invoker) sends the model str(result), so __str__
+    # The harness adapter (kit_ext._invoker) sends the model str(result), so __str__
     # carries everything the model needs to refer to the artifact afterwards.
     def __str__(self) -> str:
         return (
@@ -112,7 +112,7 @@ class AttachmentReadResult(BaseModel):
     returned_chars: int = 0
     reason: str | None = None
 
-    # This is what the model sees (harness_ext._invoker sends str(result)): a one-line
+    # This is what the model sees (kit_ext._invoker sends str(result)): a one-line
     # header, then the text, which read_attachment_impl has already bounded.
     def __str__(self) -> str:
         head = (

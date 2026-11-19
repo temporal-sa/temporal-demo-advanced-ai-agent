@@ -18,9 +18,9 @@ from pydantic_ai.durable_exec.temporal import AgentPlugin, PydanticAIPlugin
 from temporalio.client import Client
 from temporalio.worker import Worker
 
-from temporal_agent_harness.plugin import AgentHarnessPlugin
+from temporal_agent_kit.plugin import AgentKitPlugin
 
-from simple_chat_agent.agent.harness_ext import payload_storage
+from simple_chat_agent.agent.kit_ext import payload_storage
 from simple_chat_agent.agent.mcp import MCP_ACTIVITIES
 
 from simple_chat_agent.agent.runtime import CODING_AGENT
@@ -42,7 +42,7 @@ async def main() -> None:
     client = await Client.connect(
         os.environ.get("TEMPORAL_TEST_ADDRESS", "127.0.0.1:7244"),
         namespace=os.environ.get("TEMPORAL_NAMESPACE", "default"),
-        plugins=[PydanticAIPlugin(), AgentHarnessPlugin(
+        plugins=[PydanticAIPlugin(), AgentKitPlugin(
             tools=[*WORKSPACE_TOOLS, *TEST_TOOLS, *RESEARCH_TOOLS, *ARTIFACT_TOOLS], large_payload_offload=payload_storage()
         )],
     )

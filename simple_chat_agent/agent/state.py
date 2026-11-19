@@ -15,8 +15,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from temporal_agent_harness.harness import agent
-from temporal_agent_harness.harness.state import HarnessState, StateRef
+from temporal_agent_kit import agent
+from temporal_agent_kit.state import AgentState, StateRef
 
 PlanStatus = Literal["pending", "in_progress", "done", "skipped"]
 FileStatus = Literal["added", "modified", "deleted", "renamed"]
@@ -29,21 +29,21 @@ MAX_BRANCH_CHARS = 250
 BRANCH_TOOLS = frozenset({"git_status", "git_commit", "run_command"})
 
 
-class PlanItem(HarnessState):
+class PlanItem(AgentState):
     """One step of the agent's plan."""
 
     text: str
     status: PlanStatus = "pending"
 
 
-class PlanState(HarnessState):
+class PlanState(AgentState):
     """The agent's checklist for the current task."""
 
     goal: str = ""
     items: list[PlanItem] = Field(default_factory=list)
 
 
-class ChangedFile(HarnessState):
+class ChangedFile(AgentState):
     """A file the agent changed in its workspace this session."""
 
     path: str
@@ -53,21 +53,21 @@ class ChangedFile(HarnessState):
     tool_id: str = ""
 
 
-class Commit(HarnessState):
+class Commit(AgentState):
     """A local commit the agent made."""
 
     hash: str
     message: str
 
 
-class ChangesState(HarnessState):
+class ChangesState(AgentState):
     """Files changed and commits made, newest last."""
 
     files: list[ChangedFile] = Field(default_factory=list)
     commits: list[Commit] = Field(default_factory=list)
 
 
-class WorkspaceState(HarnessState):
+class WorkspaceState(AgentState):
     """What the workspace's terminal did last, and the branch it is on.
 
     Every field has a default: a run restores this from CarriedState JSON written by an

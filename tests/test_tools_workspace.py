@@ -37,8 +37,8 @@ from temporalio.testing import ActivityEnvironment
 
 from simple_chat_agent.agent.tools import workspace as ws
 from simple_chat_agent.worker.sandbox import executor as ex
-from temporal_agent_harness.harness import agent
-from temporal_agent_harness.harness.stream_context import TurnStreamContext
+from temporal_agent_kit import agent
+from temporal_agent_kit.stream_context import TurnStreamContext
 
 TOKEN = "test-executor-token"
 
@@ -373,7 +373,7 @@ class GitBranchTests(unittest.TestCase):
 
 class WorkspaceStateFoldTests(unittest.TestCase):
     def refs(self) -> tuple[Any, Any, list[Any]]:
-        from temporal_agent_harness.harness.state import StateRef
+        from temporal_agent_kit.state import StateRef
 
         from simple_chat_agent.agent import state as st
 
@@ -518,7 +518,7 @@ class ToolDeclarationTests(unittest.TestCase):
                 agent.tool_activity(tool)
 
     def test_workspace_id_is_hidden_from_the_model(self) -> None:
-        from temporal_agent_harness.ai_sdks.pydantic_ai_harness import _tool_schema
+        from temporal_agent_kit.ai_sdks.pydantic_ai import _tool_schema
 
         for tool in ws.WORKSPACE_TOOLS:
             _, _, schema = _tool_schema(tool)

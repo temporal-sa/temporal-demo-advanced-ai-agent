@@ -24,7 +24,7 @@ from typing import Any
 
 from temporalio.exceptions import ApplicationError
 
-from temporal_agent_harness.harness import agent
+from temporal_agent_kit import agent
 
 from simple_chat_agent.agent.contracts import (
     ASK_MAX_OPTIONS,

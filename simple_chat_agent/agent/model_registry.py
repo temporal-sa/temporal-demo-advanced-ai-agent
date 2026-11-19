@@ -16,7 +16,7 @@ from pydantic_ai.models import Model
 from pydantic_ai.settings import ModelSettings
 
 from simple_chat_agent.agent.contracts import ModelChoice, Provider
-from simple_chat_agent.agent.harness_ext import HeartbeatingModel
+from simple_chat_agent.agent.kit_ext import HeartbeatingModel
 
 log = logging.getLogger(__name__)
 

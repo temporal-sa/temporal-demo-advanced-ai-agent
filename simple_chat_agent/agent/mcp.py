@@ -227,7 +227,7 @@ def model_description(server: str, tool: McpToolInfo) -> str:
 
 def _gate(server: McpServerRecord, tool: McpToolInfo, *, owner_id: str, environment: str) -> Any:
     """The inline harness tool one MCP tool runs through: approval, tool events, mcp_call."""
-    from temporal_agent_harness.harness import agent
+    from temporal_agent_kit import agent
 
     async def call(arguments: dict[str, Any]) -> McpCallOutput:
         try:

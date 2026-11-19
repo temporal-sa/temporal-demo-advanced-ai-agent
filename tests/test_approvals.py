@@ -27,13 +27,13 @@ from temporalio.worker import Worker
 from temporalio.worker.workflow_sandbox import SandboxedWorkflowRunner, SandboxRestrictions
 
 with workflow.unsafe.imports_passed_through():
-    from temporal_agent_harness.harness.agent_protocol import (
+    from temporal_agent_kit.agent_protocol import (
         AutoApprovalContext,
         AutoApprovalVerdict,
         ToolApprovalDecision,
         ToolApprovalPolicy,
     )
-    from temporal_agent_harness.harness.agent_workflow import AUTO_MODE_EVALUATOR_ATTR
+    from temporal_agent_kit.agent_workflow import AUTO_MODE_EVALUATOR_ATTR
 
     from simple_chat_agent.agent import approvals
     from simple_chat_agent.agent.approvals import (
@@ -412,7 +412,7 @@ class CriteriaAndPostures(unittest.TestCase):
             sanitize(ok_edit, "prod")  # type: ignore[arg-type]
 
     def test_subagent_inherits_parent_policy_including_auto_mode(self) -> None:
-        from temporal_agent_harness.harness.agent_protocol import AgentConfig
+        from temporal_agent_kit.agent_protocol import AgentConfig
 
         from simple_chat_agent.agent.subagents import child_run_config
 
@@ -524,8 +524,8 @@ class Decide(unittest.TestCase):
 
     def test_matches_jev_rule_order_where_classes_allow(self) -> None:
         try:
-            from temporal_agent_harness.ai_sdks.jev import JevApprovalAnswer
-            from temporal_agent_harness.ai_sdks.jev import decide as jev_decide
+            from temporal_agent_kit.ai_sdks.jev import JevApprovalAnswer
+            from temporal_agent_kit.ai_sdks.jev import decide as jev_decide
         except ImportError:
             self.skipTest("typesafe extra not installed")
         for label in ("approve", "deny", "escalate"):
@@ -882,7 +882,7 @@ class EvaluatorProbe:
 def _runner() -> SandboxedWorkflowRunner:
     return SandboxedWorkflowRunner(
         restrictions=SandboxRestrictions.default.with_passthrough_modules(
-            "simple_chat_agent", "temporal_agent_harness", "pydantic", "pydantic_core", "annotated_types"
+            "simple_chat_agent", "temporal_agent_kit", "pydantic", "pydantic_core", "annotated_types"
         )
     )
 

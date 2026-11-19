@@ -44,7 +44,7 @@ from temporalio import activity, workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ApplicationError
 
-from temporal_agent_harness.harness.agent_protocol import (
+from temporal_agent_kit.agent_protocol import (
     AutoApprovalContext,
     AutoApprovalCriteria,
     AutoApprovalCriteriaSet,
@@ -53,7 +53,7 @@ from temporal_agent_harness.harness.agent_protocol import (
     ToolApprovalDecision,
     ToolApprovalPolicy,
 )
-from temporal_agent_harness.harness.agent_workflow import AUTO_MODE_EVALUATOR_ATTR
+from temporal_agent_kit.agent_workflow import AUTO_MODE_EVALUATOR_ATTR
 
 from simple_chat_agent.agent.contracts import ApprovalHistoryEntry
 
@@ -1254,7 +1254,7 @@ Evaluator = Callable[[AutoApprovalContext], Awaitable[AutoApprovalDecision]]
 
 def _typesafe_importable() -> bool:
     try:
-        import temporal_agent_harness.ai_sdks.jev  # noqa: F401
+        import temporal_agent_kit.ai_sdks.jev  # noqa: F401
     except ImportError:
         return False
     return True
@@ -1305,7 +1305,7 @@ def build_evaluator(
     """
     _check_environment(environment)
     if judge == "jev" and _typesafe_importable():
-        from temporal_agent_harness.ai_sdks.jev import jev_evaluator
+        from temporal_agent_kit.ai_sdks.jev import jev_evaluator
 
         jev = jev_evaluator()
 
@@ -1354,7 +1354,7 @@ def typesafe_plugin_if_configured() -> Any | None:
     ``TYPESAFE_API_KEY`` is set and the extra is installed; else ``None``. Worker-only.
 
     The plugin owns an ``AsyncTypeSafeClient`` with SDK retries off (Temporal owns retries);
-    it lives for the worker process. Register it BEFORE ``AgentHarnessPlugin``.
+    it lives for the worker process. Register it BEFORE ``AgentKitPlugin``.
     """
     key = _typesafe_key()
     if not key or not _typesafe_importable():

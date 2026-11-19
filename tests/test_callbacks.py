@@ -14,7 +14,7 @@ os.environ.setdefault("ANTHROPIC_API_KEY", "unit-test-not-used")
 
 from temporalio.exceptions import ApplicationError  # noqa: E402
 
-from simple_chat_agent.agent import approvals, harness_ext  # noqa: E402
+from simple_chat_agent.agent import approvals, kit_ext  # noqa: E402
 from simple_chat_agent.agent.contracts import ENQUEUE_CALLBACK_SIGNAL, PICK_MAX_FILES  # noqa: E402
 from simple_chat_agent.agent.tools import callbacks  # noqa: E402
 from simple_chat_agent.api import agent_routes  # noqa: E402
@@ -92,23 +92,23 @@ class AdmissionTests(unittest.TestCase):
     def test_admits_an_offered_answer_and_refuses_others(self) -> None:
         runner = _Runner()
         check = callbacks.check_callback_result
-        asyncio.run(harness_ext.admit_callback_result(runner, "t1", {"option_id": "keep"}, None, check))  # type: ignore[arg-type]
+        asyncio.run(kit_ext.admit_callback_result(runner, "t1", {"option_id": "keep"}, None, check))  # type: ignore[arg-type]
         self.assertEqual(runner.handled[0].result, {"option_id": "keep"})
         with self.assertRaises(ApplicationError) as cm:
-            asyncio.run(harness_ext.admit_callback_result(runner, "t1", {"option_id": "nope"}, None, check))  # type: ignore[arg-type]
-        self.assertEqual(harness_ext.describe_rejection(cm.exception)[0], "invalid_answer")
-        self.assertIn("not one of the offered options", harness_ext.describe_rejection(cm.exception)[1])
+            asyncio.run(kit_ext.admit_callback_result(runner, "t1", {"option_id": "nope"}, None, check))  # type: ignore[arg-type]
+        self.assertEqual(kit_ext.describe_rejection(cm.exception)[0], "invalid_answer")
+        self.assertIn("not one of the offered options", kit_ext.describe_rejection(cm.exception)[1])
         # A declined question (error) needs no offered id.
-        asyncio.run(harness_ext.admit_callback_result(runner, "t1", None, "No thanks", check))  # type: ignore[arg-type]
+        asyncio.run(kit_ext.admit_callback_result(runner, "t1", None, "No thanks", check))  # type: ignore[arg-type]
         self.assertEqual(len(runner.handled), 2)
         with self.assertRaises(ApplicationError) as cm:
-            asyncio.run(harness_ext.admit_callback_result(runner, "zz", {"option_id": "keep"}, None, check))  # type: ignore[arg-type]
-        self.assertEqual(harness_ext.describe_rejection(cm.exception)[0], "unknown_callback")
+            asyncio.run(kit_ext.admit_callback_result(runner, "zz", {"option_id": "keep"}, None, check))  # type: ignore[arg-type]
+        self.assertEqual(kit_ext.describe_rejection(cm.exception)[0], "unknown_callback")
 
     def test_interrupt_fails_pending_callbacks_of_the_turn(self) -> None:
         runner = _Runner()
-        self.assertEqual(harness_ext.fail_pending_callbacks(runner, turn_id="other", reason="x"), 0)  # type: ignore[arg-type]
-        self.assertEqual(harness_ext.fail_pending_callbacks(runner, turn_id="turn-1", reason="Stopped."), 1)  # type: ignore[arg-type]
+        self.assertEqual(kit_ext.fail_pending_callbacks(runner, turn_id="other", reason="x"), 0)  # type: ignore[arg-type]
+        self.assertEqual(kit_ext.fail_pending_callbacks(runner, turn_id="turn-1", reason="Stopped."), 1)  # type: ignore[arg-type]
         self.assertEqual(runner.entries["t1"].outcome, ("error", "Stopped."))
         self.assertEqual(runner.published, ["t1"])
 

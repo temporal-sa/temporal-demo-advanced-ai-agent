@@ -1,14 +1,14 @@
 # Basic File Agent
 
 The smallest agent in this repo: a Temporal Workflow on
-[`temporal-agent-harness`](https://pypi.org/project/temporal-agent-harness/) with
-Pydantic AI, and two file tools. It uses only the harness's public API.
+[`temporal-agent-kit`](https://pypi.org/project/temporal-agent-kit/) with
+Pydantic AI, and two file tools. It uses only Agent Kit's public API.
 
 | File | What it shows |
 | --- | --- |
 | `tools.py` | `read_file` and `write_file` as activity tools (`@agent.activity_tool_defn`), confined to the workspace. A path outside it is refused. |
-| `workflow.py` | The agent: `@agent.defn`, one `@agent.accepts` handler, an `AgentWorkflowRunner`, and a Pydantic AI `TemporalAgent` whose tools run through the harness. |
-| `worker.py` | The worker. `AgentHarnessPlugin(tools=...)` registers the tool activities, and `AgentPlugin` registers the model activities. |
+| `workflow.py` | The agent: `@agent.defn`, one `@agent.accepts` handler, an `AgentWorkflowRunner`, and a Pydantic AI `Agent` with the `TemporalAgentKitDurability` capability, whose tools run through Agent Kit and whose model output streams onto the turn. |
+| `worker.py` | The worker. `AgentKitPlugin(tools=...)` registers the tool activities, and `AgentPlugin` registers the model activities. |
 | `start_workflow.py` | Starts an agent, sends one prompt with `AgentClient.send_message`, prints the tools it ran and its reply, then closes it. |
 
 **Approvals.** The approval policy is

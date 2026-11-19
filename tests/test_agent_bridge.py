@@ -24,8 +24,8 @@ import redis
 import redis.asyncio as aredis
 from temporalio.client import WorkflowExecutionStatus
 
-from temporal_agent_harness.harness.agent_protocol import AgentEvent
-from temporal_agent_harness.harness.agent_protocol.events import (
+from temporal_agent_kit.agent_protocol import AgentEvent
+from temporal_agent_kit.agent_protocol.events import (
     CallbackRequested,
     CallbackResolved,
     MessageAccepted,
@@ -791,14 +791,14 @@ class SubagentMarkerTests(_RedisCase):
 
     @staticmethod
     def marker() -> AgentEvent:
-        from temporal_agent_harness.harness.agent_protocol.events import SubagentStreamUnavailable
+        from temporal_agent_kit.agent_protocol.events import SubagentStreamUnavailable
 
         return AgentEvent(agent_id=CHILD, turn_id="", turn_number=0, message_id=None, timestamp=0.0,
                           event=SubagentStreamUnavailable(subagent_id=CHILD, workflow_id="child-wf-1", reason="gone"))
 
     @staticmethod
     def sent(turn: int, ts: float) -> AgentEvent:
-        from temporal_agent_harness.harness.agent_protocol.events import SubagentMessageSent
+        from temporal_agent_kit.agent_protocol.events import SubagentMessageSent
 
         return item(SubagentMessageSent(subagent_id=CHILD, agent_key="helper", workflow_id="child-wf-1",
                                         handler="investigate", subagent_turn=turn, from_offset=0), ts=ts)
@@ -856,7 +856,7 @@ class SettingsResultTests(_RedisCase):
     """Review #7: the session list follows the agent's set_model / set_posture RESULT."""
 
     async def test_settings_results_reach_on_settings_and_others_do_not(self) -> None:
-        from temporal_agent_harness.harness.agent_protocol.events import MessageHandlerEnd
+        from temporal_agent_kit.agent_protocol.events import MessageHandlerEnd
 
         applied = {"ok": True, "detail": "Approvals: auto.", "setting": "posture", "model": None, "posture": "auto"}
         refused = {"ok": False, "detail": "no key", "setting": "model",
@@ -883,7 +883,7 @@ class SettingsResultTests(_RedisCase):
         self.assertEqual(calls, [("s", applied), ("s", refused), ("s", web)])
 
     async def test_a_failing_update_never_stops_the_transcript(self) -> None:
-        from temporal_agent_harness.harness.agent_protocol.events import MessageHandlerEnd
+        from temporal_agent_kit.agent_protocol.events import MessageHandlerEnd
 
         async def boom(session: str, ack: dict) -> None:
             raise RuntimeError("redis blip")

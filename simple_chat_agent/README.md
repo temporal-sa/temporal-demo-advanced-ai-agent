@@ -5,7 +5,7 @@ package.
 
 | Path | What it is | Entrypoint |
 | --- | --- | --- |
-| `agent/` | The coding agent on the official harness: `CodingAgent`, `CodingSessions`, subagents, tools, approvals, MCP. | `agent/worker.py` (production), `agent/dev_worker.py` (local) |
+| `agent/` | The coding agent on the official Agent Kit: `CodingAgent`, `CodingSessions`, subagents, tools, approvals, MCP. | `agent/worker.py` (production), `agent/dev_worker.py` (local) |
 | `worker/main.py` | The catalog's worker entrypoint; runs `agent/worker.py`. | `python -m simple_chat_agent.worker.main` |
 | `worker/codec_server.py`, `worker/shutdown.py` | Temporal Web codec server (`/health`) and the graceful-drain settings. | started by the worker |
 | `worker/sandbox/` | The credential-free Bubblewrap executor. | `python -m simple_chat_agent.worker.sandbox.executor` |
