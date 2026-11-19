@@ -3,22 +3,22 @@ name = "temporal-agent-kit-example"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
-    "anthropic>=1.9.0,<2",
-    "boto3>=1.43.17",
-    "fastapi>=0.136.1",
-    "google-genai>=2.25.0,<3",
+    "anthropic>=2.10.0,<3",
+    "boto3>=1.44.6",
+    "fastapi>=0.165.0",
+    "google-genai>=2.34.0,<3",
     "httpx>=0.28.1",
-    "mcp>=1.27.1",
-    "openai>=3.19.0,<4",
-    "pydantic>=2.13.4",
-    "python-multipart>=0.0.29",
-    "pyjwt[crypto]>=2.12.1",
-    "redis>=6.4.0",
-    "temporalio>=1.35.0",
-    "trafilatura>=2.0.0",
-    "uvicorn>=0.47.0",
+    "mcp>=1.30.0,<2",
+    "openai>=3.55.1,<4",
+    "pydantic>=2.14.4",
+    "python-multipart>=0.0.34",
+    "pyjwt[crypto]>=2.15.1",
+    "redis>=8.1.0",
+    "temporalio>=1.36.1",
+    "trafilatura>=2.3.1",
+    "uvicorn>=0.54.0",
     "temporal-agent-kit[code-mode,pydantic-ai,typesafe]==0.12.1",
-    "pydantic-ai-slim[anthropic,google,openai,temporal]==2.53.0",
+    "pydantic-ai-slim[anthropic,google,openai,temporal]==2.71.0",
 ]

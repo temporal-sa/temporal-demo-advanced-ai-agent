@@ -1,4 +1,4 @@
-"""Gap-fillers for temporal-agent-kit 0.12.1 and Pydantic AI 2.53.0.
+"""Gap-fillers for temporal-agent-kit 0.12.1 and Pydantic AI 2.71.0.
 
 Every use of a private Agent Kit or Pydantic AI internal lives in this module, with the source
 location it depends on, so a kit upgrade has one file to re-check
@@ -88,53 +88,6 @@ _RETRYABLE_4XX = frozenset({408, 409, 429})
 
 
 # ---------------------------------------------------------------------------
-# Usage extraction fix (Pydantic AI 2.53.0 + genai-prices >= 0.1.10)
-# ---------------------------------------------------------------------------
-
-
-def _install_usage_extract_fix() -> None:
-    """Keep reasoning tokens that genai-prices returns in a field RequestUsage doesn't know.
-
-    genai-prices reports ``output_reasoning_tokens``, which ``RequestUsage`` has no field for.
-    Pydantic AI 2.14.1 failed on it and returned zero usage; 2.53.0 keeps the token counts but
-    drops the reasoning tokens (pydantic_ai/usage.py, ``RequestUsage.extract``). This wrapper
-    keeps the known fields and moves reasoning tokens into ``details``, where the observer reads
-    them as ``thought_tokens``. Filed upstream.
-    """
-    import dataclasses
-
-    from genai_prices.data_snapshot import get_snapshot
-    from pydantic_ai.usage import RequestUsage
-
-    if getattr(RequestUsage.extract, "__coding_agent_fix__", False):
-        return
-    known = {f.name for f in dataclasses.fields(RequestUsage)}
-    original = RequestUsage.extract.__func__
-
-    def extract(cls, data, *, provider, provider_url, provider_fallback, api_flavor="default", details=None):
-        details = dict(details or {})
-        for provider_id, api_url in [(None, provider_url), (provider, None), (provider_fallback, None)]:
-            try:
-                found = get_snapshot().find_provider(None, provider_id, api_url)
-                _ref, usage = found.extract_usage(data, api_flavor=api_flavor)
-            except Exception:  # noqa: BLE001 - same fallthrough as upstream
-                continue
-            values = {k: v for k, v in usage.__dict__.items() if v is not None}
-            reasoning = values.pop("output_reasoning_tokens", None)
-            if reasoning and "reasoning_tokens" not in details:
-                details["reasoning_tokens"] = reasoning
-            return cls(**{k: v for k, v in values.items() if k in known}, details=details)
-        return original(cls, data, provider=provider, provider_url=provider_url,
-                        provider_fallback=provider_fallback, api_flavor=api_flavor, details=details)
-
-    extract.__coding_agent_fix__ = True  # type: ignore[attr-defined]
-    RequestUsage.extract = classmethod(extract)  # type: ignore[method-assign]
-
-
-_install_usage_extract_fix()
-
-
-# ---------------------------------------------------------------------------
 # tool_end carries the model-facing text
 # ---------------------------------------------------------------------------
 
@@ -146,9 +99,9 @@ def _install_tool_output_text() -> None:
     ``_tool_output_json``, called by ``tool_defn`` and ``activity_tool_defn``), so a tool
     returning a :class:`ToolResult` would publish its fields instead of the compact text its
     ``__str__`` writes for the model. The product view parses that text (diffs, command
-    summaries, artifacts, the branch), and every transcript already stored in Redis holds it,
-    so this keeps the text. A string is valid protocol JSON, so kit readers (the console)
-    still read it. The function is looked up at call time, so replacing the module attribute
+    summaries, artifacts, the branch; ``toolOutputText`` in the web app), so this keeps the
+    text until the UI reads the structured result instead, which is a separate change. A
+    string is valid protocol JSON, so kit readers (the console) still read it. The function is looked up at call time, so replacing the module attribute
     covers both call sites, in workflow code and in activities.
     """
     from temporal_agent_kit import agent_workflow

@@ -410,14 +410,17 @@ class RealAuthTests(unittest.TestCase):
     def test_real_app_mounts_console_when_enabled(self) -> None:
         from simple_chat_agent.api import main
 
-        paths = {getattr(r, "path", None) for r in main.app.routes}
+        # Checked by request, not by listing app.routes: since FastAPI 0.165 an included
+        # router is one lazy entry there, not its routes.
+        client = TestClient(main.app)
+        r = client.get("/console/api/sessions")
         if main.app.state.console_enabled:
-            self.assertIn("/console/api/sessions", paths)
-            self.assertIn("/console/", paths)
+            self.assertEqual((r.status_code, r.json()["error"]), (401, "unauthorized"))
+            self.assertEqual(client.get("/console/").status_code, 200)
         else:
-            self.assertFalse(any(str(p).startswith("/console") for p in paths if p))
-        # The packaged harness app is never mounted (its /api/agents), and nothing adds CORS.
-        self.assertNotIn("/api/agents", paths)
+            self.assertEqual(r.status_code, 404)
+        # The packaged Agent Kit app is never mounted (its /api/agents), and nothing adds CORS.
+        self.assertEqual(client.get("/api/agents").status_code, 404)
         self.assertNotIn("CORSMiddleware", [m.cls.__name__ for m in main.app.user_middleware])
 
 

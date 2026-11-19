@@ -61,6 +61,11 @@ class UsageTests(unittest.TestCase):
         self.assertEqual(u["cache_read_tokens"], 0)  # reported, and really zero
         self.assertIsNone(u["thinking_tokens"])
 
+    def test_anthropic_thinking_from_output_reasoning_tokens(self) -> None:
+        # Pydantic AI 2.71 reports Anthropic's thinking as RequestUsage.output_reasoning_tokens.
+        u = t.usage_from_response({**ANTHROPIC_RESPONSE, "usage": {**ANTHROPIC_RESPONSE["usage"], "output_reasoning_tokens": 30}})
+        self.assertEqual(u["thinking_tokens"], 30)
+
     def test_openai_has_reasoning_but_no_cache_writes(self) -> None:
         u = t.usage_from_response({
             "provider_name": "openai", "model_name": "gpt-x",

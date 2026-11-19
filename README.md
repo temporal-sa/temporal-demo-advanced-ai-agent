@@ -43,8 +43,8 @@ When a worker dies mid-turn, the model call's heartbeat stops, Temporal retries 
 
 ## Prerequisites
 
-- Python 3.12 and [uv](https://docs.astral.sh/uv/)
-- Node 22 (for the web app)
+- Python 3.14 and [uv](https://docs.astral.sh/uv/)
+- Node 26 (for the web app)
 - Docker Desktop (for the sandbox executor)
 - The [Temporal CLI](https://docs.temporal.io/cli)
 - `redis-server`
@@ -129,6 +129,6 @@ About 70% of the input is read from the provider's cache, which providers bill a
 
 ## Notes
 
-- Agent Kit is pre-1.0 and pinned at 0.12.1, with Pydantic AI at 2.53.0. `kit_ext.py` uses a few of their private internals; `tests/test_kit_ext.py` fails if they move.
+- Agent Kit is pre-1.0 and pinned at 0.12.1, with Pydantic AI at 2.71.0. `kit_ext.py` uses a few of their private internals; `tests/test_kit_ext.py` fails if they move.
 - MCP servers are local only. In the catalog, MCP is off and the judge can approve only reads and file edits. "Never ask" is available everywhere: every tool call runs without asking.
 - There is no patching. Workers are versioned and workflows are PINNED; a code change ships as a new Worker Deployment Version.

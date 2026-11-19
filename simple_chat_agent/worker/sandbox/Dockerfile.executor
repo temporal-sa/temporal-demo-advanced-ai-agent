@@ -7,10 +7,10 @@
 # The executor needs only fastapi, uvicorn and pydantic, plus the sandbox tools below. It
 # must never hold model-provider or integration keys (PRD §5 rule 6); its startup self-test
 # refuses to report healthy if it sees any.
-# Pinned: Python 3.12.15 on Debian trixie, whose git (2.47) meets the git tools' >= 2.40
+# Pinned: Python 3.14.10 on Debian trixie, whose git (2.47) meets the git tools' >= 2.40
 # requirement (--attr-source). The executor's startup self-test fails /healthz on an older
 # git. Bump the tag and digest together.
-FROM python:3.12.15-slim-trixie@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
+FROM python:3.14.10-slim-trixie@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f
 
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -22,9 +22,9 @@ RUN apt-get update \
         tini \
         util-linux \
     && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir "fastapi==0.136.1" "uvicorn==0.47.0" "pydantic==2.13.4" \
+    && pip install --no-cache-dir "fastapi==0.165.0" "uvicorn==0.54.0" "pydantic==2.14.4" \
     # pytest is preinstalled for the agent: the demo fixture's tests run with network off.
-    && pip install --no-cache-dir "pytest==8.4.2" \
+    && pip install --no-cache-dir "pytest==9.2.0" \
     && groupadd --gid 65532 sandbox \
     && useradd --uid 65532 --gid 65532 --create-home --home-dir /home/sandbox sandbox \
     && mkdir /workspace /workspaces \
