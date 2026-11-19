@@ -79,6 +79,8 @@ Then start each piece in its own terminal:
 
 Tests: `.venv/bin/python -m unittest discover -s tests` for Python (Redis on 6390; some suites also want the dev server on 7244), and `npm test` and `npm run typecheck` in `simple_chat_agent/web`.
 
+The replay test (`tests/test_replay.py`) replays recorded `CodingAgent` histories from `tests/fixtures/histories/` on the current build. None are recorded for this build yet, so it skips. Record them whenever workflow code changes, with provider keys in `.env.local`, the dev stack and the executor running: `RUN_INTEGRATION=1 .venv/bin/python -m tests.integration.record_histories`.
+
 ## Demo script (7 minutes)
 
 One session, from **New demo session**. The seed is a small Python service with one real bug and a test suite that takes about 20 seconds.
