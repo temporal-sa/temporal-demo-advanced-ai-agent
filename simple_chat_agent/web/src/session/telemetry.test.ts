@@ -156,6 +156,14 @@ describe("other frames", () => {
     expect(t.unknownFrames).toEqual({ x_future: 2 });
     expect(t.calls).toHaveLength(0);
     expect(t.worker.answering).toBe(true);
+    expect(t.closeReason).toBeNull();
+  });
+
+  it("records why the agent closed", () => {
+    expect(fold([{ event: "agent_closed", data: { reason: "idle_timeout_expired", turn_number: 0 } }]).closeReason).toBe(
+      "idle_timeout_expired",
+    );
+    expect(fold([{ event: "agent_closed", data: {} }]).closeReason).toBe("requested");
   });
 
   it("knows the events Agent Kit added after 0.7 (agent_closed, steering_*)", () => {

@@ -113,6 +113,8 @@ export interface AgentConfig extends AgentCatalog {
   default_tool_risk_class?: string;
   /** How long sessions are kept (days). */
   session_ttl_days?: number;
+  /** How long a session may sit idle before it closes itself, in minutes (0: never). */
+  close_after_idle_minutes?: number;
   /** P4: the provider's built-in web search (off by default, per session). */
   web_search?: { available: boolean; default: boolean };
   /** P4: MCP servers (local only). */

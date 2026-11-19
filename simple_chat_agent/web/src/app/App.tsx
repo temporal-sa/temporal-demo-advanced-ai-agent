@@ -32,6 +32,7 @@ import type { TranscriptContextValue } from "../transcript/context";
 import { postureLabel } from "../composer/choices";
 import { McpDialog, mcpReturnNotice } from "../mcp/McpDialog";
 import { DecisionDock, Workbench, WorkerBanner } from "./slots";
+import { endedNotice } from "../session/ended";
 
 type Boot =
   | { kind: "loading" }
@@ -364,8 +365,29 @@ function Layout({ parts, session, page = { kind: "landing" } }: { parts: ShellPa
       },
     [session, config, modelName, phone],
   );
+  // An ended session (closed, or idle past close_after_idle_minutes) keeps its transcript but
+  // takes no more sends. The list learns it from Describe; the stream from agent_closed, or a
+  // send the API refused with session_closed. Either of the last two refetches the list.
+  const closeReason = session?.telemetry.closeReason ?? null;
+  const refusedClosed = session ? session.sends.some((r) => r.errorCode === "session_closed") : false;
+  const { refresh: refreshList } = parts;
+  useEffect(() => {
+    if (closeReason !== null || refusedClosed) void refreshList();
+  }, [closeReason, refusedClosed, refreshList]);
+  const ended = session
+    ? endedNotice({
+        listedClosed: !!parts.summary?.closed || refusedClosed,
+        closeReason,
+        idleMinutes: parts.config?.close_after_idle_minutes,
+      })
+    : null;
   const notices = (
     <>
+      {ended && (
+        <div className="notice" role="status">
+          <span>{ended}</span>
+        </div>
+      )}
       {parts.actionError && (
         <div className="notice" role="alert">
           <span>{parts.actionError}</span>

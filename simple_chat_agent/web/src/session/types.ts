@@ -361,6 +361,9 @@ export interface SessionTelemetry {
   rejections: Rejection[];
   /** Frame types we don't know, by count. Ignored otherwise. */
   unknownFrames: Record<string, number>;
+  /** Why the agent closed (`agent_closed`): "requested" or "idle_timeout_expired". Null while
+   *  it is open, or when the stream hasn't carried the event. */
+  closeReason: string | null;
 }
 
 // -- callbacks (P4, A12) --------------------------------------------------------------------

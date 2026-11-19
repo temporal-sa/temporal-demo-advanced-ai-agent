@@ -81,6 +81,8 @@ export interface TelemetryAcc {
   runIds: Record<string, string>;
   runIdsByWorkflow: Record<string, string>;
   unknown: Record<string, number>;
+  /** Why the agent closed (`agent_closed` reason), once it has. */
+  closeReason: string | null;
 }
 
 export const HEALTHY: WorkerHealth = {
@@ -93,7 +95,7 @@ export const HEALTHY: WorkerHealth = {
 };
 
 export function emptyAcc(): TelemetryAcc {
-  return { usage: new Map(), recoveries: new Map(), worker: HEALTHY, rejections: new Map(), runIds: {}, runIdsByWorkflow: {}, unknown: {} };
+  return { usage: new Map(), recoveries: new Map(), worker: HEALTHY, rejections: new Map(), runIds: {}, runIdsByWorkflow: {}, unknown: {}, closeReason: null };
 }
 
 // -- field readers (frames are untrusted JSON) ---------------------------------------------
@@ -194,6 +196,15 @@ export function foldFrames(acc: TelemetryAcc, frames: readonly RawFrame[]): bool
     if (runId && agentId && acc.runIds[agentId] !== runId) {
       acc.runIds = { ...acc.runIds, [agentId]: runId };
       changed = true;
+    }
+    if (event === "agent_closed") {
+      // Published once, outside any turn, when the agent stops: by `close`, or idle too long.
+      const reason = (d && str(d.reason)) ?? "requested";
+      if (acc.closeReason !== reason) {
+        acc.closeReason = reason;
+        changed = true;
+      }
+      continue;
     }
     if (HARNESS_EVENTS.has(event)) continue;
     switch (event) {
@@ -363,6 +374,7 @@ export function summarize(acc: TelemetryAcc): SessionTelemetry {
     runIdsByWorkflow: acc.runIdsByWorkflow,
     rejections: [...acc.rejections.values()],
     unknownFrames: { ...acc.unknown },
+    closeReason: acc.closeReason,
   };
 }
 

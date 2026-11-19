@@ -80,6 +80,7 @@ One demo run uses about 130k tokens (see the README), so a user can do roughly 3
 | `SIMPLE_CHAT_S3_BUCKET`, `SIMPLE_CHAT_ARTIFACTS_TABLE`, `SIMPLE_CHAT_DYNAMODB_TABLE` | API, worker | Shared claim-check payloads, the frame archive, artifacts and OAuth metadata. Uses the workload role; no static AWS keys. |
 | `SIMPLE_CHAT_REQUIRE_SHARED_STORAGE=true` | API, worker | Startup fails if the shared stores are missing |
 | `AGENT_SESSION_TTL_SECONDS` | API, worker | Default 1,296,000 (15 days) |
+| `AGENT_CLOSE_AFTER_IDLE_MINUTES` | API | Default 30. A session with no turn running and nothing queued for this long closes itself (Agent Kit `close_after_idle`); a turn waiting on a person isn't idle. `0` never closes on idle. The API passes it at session start; a session started without one (an older API, the Temporal CLI) uses 30. The transcript stays readable; sends to it answer `session_closed`. A bad value fails startup. |
 | `AGENT_ARCHIVE_PREFIX` | API | Default `agent-frames/<redis prefix>` |
 | `WORKSPACE_EXECUTOR_URL` | API, worker | The executor Service |
 | `SIMPLE_CHAT_CODEC_AUTH_ENABLED=true` | worker | Keep it on. The codec server listens on the worker pod (8001) and isn't exposed outside the cluster; `/decode` can fetch S3 payloads, so it checks the Temporal Cloud token (JWKS). `SIMPLE_CHAT_CODEC_ALLOWED_ORIGINS` only matters if a browser ever calls it directly. |

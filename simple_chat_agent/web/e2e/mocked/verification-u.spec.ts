@@ -104,6 +104,29 @@ for (const c of [
   });
 }
 
+test.describe("ended session", () => {
+  test("an agent closed for idleness says so, and the list shows it ended", async ({ page, mockApi }) => {
+    const api = await mockApi({ config: { close_after_idle_minutes: 30 } });
+    const id = sessionId("idle-closed");
+    await openScripted(page, api, working(), { session_id: id });
+    await expect(page.getByRole("status").filter({ hasText: "This session" })).toHaveCount(0);
+    // The workflow completes, and the list (Describe) says so from then on.
+    api.sessions = api.sessions.map((s) => (s.session_id === id ? { ...s, closed: true } : s));
+    const outside = { agentId: "agent-root", turnId: "", turnNumber: 0, messageId: "" };
+    await api.push(id, [ev(outside, "agent_closed", { reason: "idle_timeout_expired" }, null)]);
+    await expect(page.getByRole("status").filter({ hasText: "This session closed after 30 minutes without activity." })).toBeVisible();
+    await expect(page.getByRole("complementary", { name: "Sessions" }).getByRole("button", { name: /\(Ended\)$/ })).toBeVisible();
+  });
+
+  test("a session the list already shows closed says it has ended", async ({ page, mockApi }) => {
+    const api = await mockApi({ config: { close_after_idle_minutes: 30 } });
+    await openScripted(page, api, working(), { session_id: sessionId("listed-closed"), closed: true });
+    await expect(
+      page.getByRole("status").filter({ hasText: "This session has ended: it was closed, or it sat idle for 30 minutes." }),
+    ).toBeVisible();
+  });
+});
+
 test.describe("phone", () => {
   test.use({ viewport: { width: 320, height: 690 }, hasTouch: true, isMobile: true });
 

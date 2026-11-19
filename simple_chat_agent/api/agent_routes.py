@@ -183,6 +183,27 @@ def web_search_allowed(environment: str) -> bool:
     return os.environ.get("AGENT_WEB_SEARCH_CATALOG", "").strip().lower() in ("1", "true", "yes", "on")
 
 
+DEFAULT_CLOSE_AFTER_IDLE_MINUTES = 30
+
+
+def close_after_idle_minutes() -> int:
+    """``AGENT_CLOSE_AFTER_IDLE_MINUTES``: how long a session may sit idle (no turn running,
+    nothing queued) before it closes itself. Default 30; 0 never closes on idle. A value that
+    isn't a whole number of minutes >= 0 fails the API's startup."""
+    raw = os.environ.get("AGENT_CLOSE_AFTER_IDLE_MINUTES", "").strip()
+    if not raw:
+        return DEFAULT_CLOSE_AFTER_IDLE_MINUTES
+    try:
+        minutes = int(raw)
+    except ValueError:
+        minutes = -1
+    if minutes < 0:
+        raise ValueError(
+            f"AGENT_CLOSE_AFTER_IDLE_MINUTES must be a whole number of minutes >= 0 (0: never); got {raw!r}"
+        )
+    return minutes
+
+
 def agent_task_queue() -> str:
     return os.environ.get("CODING_AGENT_TASK_QUEUE", "coding-agent")
 
@@ -1170,6 +1191,8 @@ def create_agent_router(
     ``AppStore``) enables uploads; ``seed`` and ``read_log`` default to the fixture seeder and
     the executor log reader."""
     router = APIRouter(route_class=HarnessErrorRoute)
+    # Read once, so a bad value fails startup rather than the first session start.
+    idle_minutes = close_after_idle_minutes()
     owners = Ownership(store, temporal)
     sessions = directory or SessionDirectory(store.r, temporal=None, task_queue=task_queue, sync_workflow=False)
     seed_fn = seed or _default_seed
@@ -1189,6 +1212,12 @@ def create_agent_router(
         """The session's workflow closed (or was asked to): ``GET sessions`` shows it."""
         await store.mark_closed(session_id)
         await sessions.mark_closed(uid, session_id)
+
+    async def session_ended(session_id: str, uid: str) -> HarnessError:
+        """A Signal found the session's workflow closed (by the user, or idle for
+        ``close_after_idle``): record it, so the list shows it, and answer ``session_closed``."""
+        await mark_closed(session_id, uid)
+        return HarnessError(409, "session_closed", "The session has ended.")
 
     async def require_root(session_id: str, uid: str) -> str:
         """Routes that act on a whole session take only its root id."""
@@ -1219,6 +1248,8 @@ def create_agent_router(
         ttl = session_ttl_seconds()
         body["session_ttl_seconds"] = ttl
         body["session_ttl_days"] = ttl // 86400 if ttl % 86400 == 0 else round(ttl / 86400, 1)
+        # How long a session may sit idle before it closes itself (0: never).
+        body["close_after_idle_minutes"] = idle_minutes
         return JSONResponse(body, headers=NO_STORE)
 
     # -- MCP servers (PRD A8): agent_mcp.py --------------------------------------------
@@ -1343,7 +1374,7 @@ def create_agent_router(
         try:
             started = await client.start_workflow(
                 AGENT_WORKFLOW_TYPE,
-                args=[AgentConfig(), data],
+                args=[AgentConfig(close_after_idle=timedelta(minutes=idle_minutes)), data],
                 id=session_id,
                 task_queue=task_queue,
                 search_attributes=owner_search_attributes(uid),
@@ -1648,7 +1679,7 @@ def create_agent_router(
             )
         except RPCError as exc:
             if exc.status == RPCStatusCode.NOT_FOUND:
-                raise not_found("The session has ended.") from None
+                raise await session_ended(body.session_id, uid) from None
             raise
         await store.note_sent(body.session_id, message_id)
         # The session list changes when the agent applies the change, not here: the bridge
@@ -1691,7 +1722,7 @@ def create_agent_router(
             )
         except RPCError as exc:
             if exc.status == RPCStatusCode.NOT_FOUND:
-                raise not_found("The session has ended.") from None
+                raise await session_ended(body.session_id, uid) from None
             raise
         await _wake(await bridge(), body.session_id)
         return JSONResponse({"tool_id": body.tool_id, "accepted": True}, headers=NO_STORE)
@@ -1835,7 +1866,7 @@ def create_agent_router(
             )
         except RPCError as exc:
             if exc.status == RPCStatusCode.NOT_FOUND:
-                raise not_found("The session has ended.") from None
+                raise await session_ended(body.session_id, uid) from None
             raise
         await _wake(await bridge(), body.session_id)
         return JSONResponse({"tool_id": body.tool_id, "accepted": True, "request_id": request_id}, headers=NO_STORE)
