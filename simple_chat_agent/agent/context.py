@@ -123,7 +123,7 @@ _EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 # - GPT-5.5 and GPT-5.4-mini: OpenAI's GPT-5 family documents a 400K context with up to 128K
 #   output and 272K maximum input. Some newer GPT-5.x models are larger; we have not verified
 #   either model's card, so we use the conservative GPT-5 figure (272K input, 128K output).
-# - Gemini 3.5 Flash / Gemini 3.1 Pro Preview: Gemini 3-family limit of 1,048,576 input and
+# - Gemini 3.6 Flash / Gemini 3.1 Pro Preview: Gemini 3-family limit of 1,048,576 input and
 #   65,536 output tokens (Gemini model cards). Assumed unchanged for these versions.
 MODEL_LIMITS: dict[str, tuple[int, int]] = {
     "anthropic:claude-opus-5-5": (1_000_000, 128_000),
@@ -131,7 +131,7 @@ MODEL_LIMITS: dict[str, tuple[int, int]] = {
     "anthropic:claude-haiku-5-5": (1_000_000, 128_000),
     "openai:gpt-5.5": (272_000, 128_000),
     "openai:gpt-5.4-mini": (272_000, 128_000),
-    "google:gemini-3.5-flash": (1_048_576, 65_536),
+    "google:gemini-3.6-flash": (1_048_576, 65_536),
     "google:gemini-3.1-pro-preview": (1_048_576, 65_536),
 }
 # Unknown model (e.g. an AGENT_MODELS_<PROVIDER> override): assume a 128K window and 16K output.
