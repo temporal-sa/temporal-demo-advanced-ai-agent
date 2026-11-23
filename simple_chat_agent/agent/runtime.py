@@ -37,7 +37,7 @@ class CodingDeps(KitDeps):
 FAST_MODELS = {
     "anthropic": "claude-haiku-5-5",
     "openai": "gpt-5.4-mini",
-    "google": "gemini-3.5-flash",
+    "google": "gemini-3.6-flash",
 }
 
 # PRD A19 and §5 rule 8: heartbeats detect a dead worker in ~10 s; at most 4 attempts.

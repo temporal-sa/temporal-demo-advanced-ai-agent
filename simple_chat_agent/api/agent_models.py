@@ -22,7 +22,7 @@ from simple_chat_agent.agent.contracts import ModelChoice, Posture, Provider
 DEFAULT_ALLOWLIST: dict[Provider, tuple[str, ...]] = {
     "anthropic": ("claude-sonnet-5-5", "claude-haiku-5-5", "claude-opus-5-5"),
     "openai": ("gpt-5.5", "gpt-5.4-mini"),
-    "google": ("gemini-3.5-flash", "gemini-3.1-pro-preview"),
+    "google": ("gemini-3.6-flash", "gemini-3.1-pro-preview"),
 }
 
 PROVIDER_LABELS: dict[Provider, str] = {"anthropic": "Anthropic", "openai": "OpenAI", "google": "Google"}
@@ -33,7 +33,7 @@ DISPLAY_NAMES: dict[str, str] = {
     "claude-opus-5-5": "Claude Opus 5.5",
     "gpt-5.5": "GPT-5.5",
     "gpt-5.4-mini": "GPT-5.4 mini",
-    "gemini-3.5-flash": "Gemini 3.5 Flash",
+    "gemini-3.6-flash": "Gemini 3.6 Flash",
     "gemini-3.1-pro-preview": "Gemini 3.1 Pro (preview)",
 }
 
@@ -42,7 +42,7 @@ DISPLAY_NAMES: dict[str, str] = {
 TIERS: dict[str, str] = {
     "claude-haiku-5-5": "fast",
     "gpt-5.4-mini": "fast",
-    "gemini-3.5-flash": "fast",
+    "gemini-3.6-flash": "fast",
     "claude-opus-5-5": "top",
     "gemini-3.1-pro-preview": "top",
 }

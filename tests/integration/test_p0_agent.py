@@ -69,7 +69,7 @@ class AgentTurnTests(unittest.IsolatedAsyncioTestCase):
 
                 # 0.3: switch provider; each new provider answers about the earlier tool result.
                 for replies, (provider, model) in enumerate(
-                    [("openai", "gpt-5.4-mini"), ("google", "gemini-3.5-flash")], start=2
+                    [("openai", "gpt-5.4-mini"), ("google", "gemini-3.6-flash")], start=2
                 ):
                     await support.send(
                         handle, "set_model", {"model": {"provider": provider, "model": model}}

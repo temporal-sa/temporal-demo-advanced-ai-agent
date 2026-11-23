@@ -27,7 +27,7 @@ TASK = (
 PROVIDERS = {
     "anthropic": {"provider": "anthropic", "model": "claude-sonnet-5-5", "effort": "medium"},
     "openai": {"provider": "openai", "model": "gpt-5.5", "effort": "medium"},
-    "google": {"provider": "google", "model": "gemini-3.5-flash", "effort": "medium"},
+    "google": {"provider": "google", "model": "gemini-3.6-flash", "effort": "medium"},
 }
 
 

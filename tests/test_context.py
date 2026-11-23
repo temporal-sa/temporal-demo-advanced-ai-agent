@@ -459,7 +459,7 @@ class BudgetHelperTests(unittest.TestCase):
         self.assertEqual(model_limits("someone:else"), (128_000, 16_000))
 
     def test_budget_for_clamps_output_reservation(self) -> None:
-        b = budget_for("google:gemini-3.5-flash", reserve_output_tokens=500_000)
+        b = budget_for("google:gemini-3.6-flash", reserve_output_tokens=500_000)
         self.assertEqual(b.reserve_output_tokens, 65_536)
 
 
